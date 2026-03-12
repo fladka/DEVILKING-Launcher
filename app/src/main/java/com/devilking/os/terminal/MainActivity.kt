@@ -7,6 +7,7 @@ import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.devilking.os.terminal.R
 
 class MainActivity : AppCompatActivity() {
 
@@ -14,17 +15,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etCommandInput: EditText
     private lateinit var scrollView: ScrollView
 
-    // Dynamic Identity Configuration
     private var systemName = "devilking"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Hide the Android Action Bar
         supportActionBar?.hide()
 
-        // Bind the UI components
         tvTerminalOutput = findViewById(R.id.tv_terminal_output)
         etCommandInput = findViewById(R.id.et_command_input)
         scrollView = findViewById(R.id.scroll_view)
