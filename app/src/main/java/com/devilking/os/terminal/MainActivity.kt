@@ -7,7 +7,6 @@ import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.devilking.os.terminal.R
 
 class MainActivity : AppCompatActivity() {
 
