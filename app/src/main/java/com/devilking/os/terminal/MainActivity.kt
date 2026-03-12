@@ -7,12 +7,14 @@ import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.devilking.os.execution.CommandExecutor
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var tvTerminalOutput: TextView
     private lateinit var etCommandInput: EditText
     private lateinit var scrollView: ScrollView
+    private lateinit var commandExecutor: CommandExecutor
 
     private var systemName = "devilking"
 
@@ -25,6 +27,9 @@ class MainActivity : AppCompatActivity() {
         tvTerminalOutput = findViewById(R.id.tv_terminal_output)
         etCommandInput = findViewById(R.id.et_command_input)
         scrollView = findViewById(R.id.scroll_view)
+        
+        // Initialize the Muscle
+        commandExecutor = CommandExecutor(this)
 
         setupInputListener()
     }
@@ -49,11 +54,23 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("root@$systemName:~# $input")
         etCommandInput.text.clear()
 
-        when (input.lowercase()) {
-            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - stealth (RAM Purge)\n  - call [name]\n  - clear (Wipe screen)")
+        // Split the input into Command and Target (e.g., "open" and "youtube")
+        val parts = input.split(Regex("\\s+"), 2)
+        val command = parts[0].lowercase()
+        val target = if (parts.size > 1) parts[1] else ""
+
+        when (command) {
+            "open" -> {
+                if (target.isNotEmpty()) {
+                    printToTerminal(commandExecutor.launchApp(target))
+                } else {
+                    printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target (e.g., 'open camera')")
+                }
+            }
+            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - stealth (RAM Purge)\n  - clear (Wipe screen)")
             "clear" -> tvTerminalOutput.text = ""
             "stealth" -> printToTerminal("> Initiating Absolute Zero... RAM Purged.")
-            else -> printToTerminal("> [!] UNKNOWN COMMAND: '$input'. Waiting for InputRouter module.")
+            else -> printToTerminal("> [!] UNKNOWN COMMAND: '$command'.")
         }
     }
 
