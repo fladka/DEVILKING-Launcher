@@ -1,0 +1,3 @@
+/workspaces/DEVILKING-Launcher/app/.cxx/Debug/5c506h72/arm64-v8a/CMakeFiles/devilking.dir
+/workspaces/DEVILKING-Launcher/app/.cxx/Debug/5c506h72/arm64-v8a/CMakeFiles/edit_cache.dir
+/workspaces/DEVILKING-Launcher/app/.cxx/Debug/5c506h72/arm64-v8a/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/workspaces/DEVILKING-Launcher/app/.cxx/Debug/5c506h72/arm64-v8a",
+  "command": "/home/codespace/android-sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/home/codespace/android-sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Ddevilking_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -fno-limit-debug-info  -fPIC -o CMakeFiles/devilking.dir/native-lib.cpp.o -c /workspaces/DEVILKING-Launcher/app/src/main/cpp/native-lib.cpp",
+  "file": "/workspaces/DEVILKING-Launcher/app/src/main/cpp/native-lib.cpp"
+}
+]

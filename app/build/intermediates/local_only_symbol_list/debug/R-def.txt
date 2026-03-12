@@ -1,0 +1,9 @@
+R_DEF: Internal format may change without notice
+local
+id commandInput
+id terminalRecyclerView
+id terminalTextLine
+layout activity_main
+layout item_terminal_line
+mipmap ic_launcher
+mipmap ic_launcher_round

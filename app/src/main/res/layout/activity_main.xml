@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="8dp">
+
+    <ScrollView
+        android:id="@+id/scroll_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <TextView
+            android:id="@+id/tv_terminal_output"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#00FF00"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:text="> DEVILKING OS [Version 1.0.0]\n> Architecture: 1B Local Core / Absolute Zero\n> System Initialized. Standing by.\n\n" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="4dp">
+
+        <TextView
+            android:id="@+id/tv_prompt"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="root@devilking:~# "
+            android:textColor="#00FF00"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/et_command_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@null"
+            android:textColor="#00FF00"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:inputType="textNoSuggestions|textVisiblePassword"
+            android:imeOptions="actionDone"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>
