@@ -43,7 +43,6 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
     const char * prompt_c = env->GetStringUTFChars(prompt, nullptr);
     std::string result_text = "";
 
-    // 1. Open a "Thoughts" Memory Context
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 1024;
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
@@ -55,7 +54,6 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
     
-    // 2. Turn your English prompt into Math Tokens
     std::vector<llama_token> tokens(1024);
     int n_tokens = llama_tokenize(vocab, prompt_c, strlen(prompt_c), tokens.data(), tokens.size(), true, true);
     if (n_tokens < 0) {
@@ -66,36 +64,42 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
         tokens.resize(n_tokens);
     }
 
-    // 3. Feed the math to the Llama Engine
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     llama_decode(ctx, batch);
 
-    llama_sampler * smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add_greedy(smpl);
-
-    // 4. Generate 25 words (Limits CPU freezing)
+    // Generate 25 words
     for (int i = 0; i < 25; i++) {
-        llama_token new_token_id = llama_sampler_sample(smpl, ctx, -1);
+        
+        // --- THE BULLETPROOF FIX ---
+        // Bypassing the broken Sampler API completely using raw manual greedy search
+        float * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
+        int n_vocab = llama_vocab_n_tokens(vocab);
+        
+        llama_token new_token_id = 0;
+        float max_logit = -1e9f;
+        for (int j = 0; j < n_vocab; j++) {
+            if (logits[j] > max_logit) {
+                max_logit = logits[j];
+                new_token_id = j;
+            }
+        }
+        // ---------------------------
         
         // Stop if the AI finishes its sentence
         if (new_token_id == llama_vocab_eos(vocab)) {
             break;
         }
 
-        // Turn the new Math Token back into an English word
         char buf[128];
         int n_chars = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
         if (n_chars > 0) {
             result_text += std::string(buf, n_chars);
         }
 
-        // Feed the new word back into the engine to guess the next word
         batch = llama_batch_get_one(&new_token_id, 1);
         llama_decode(ctx, batch);
     }
 
-    // 5. Cleanup
-    llama_sampler_free(smpl);
     llama_free(ctx);
     env->ReleaseStringUTFChars(prompt, prompt_c);
 
