@@ -9,6 +9,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.devilking.os.execution.CommandExecutor
 import com.devilking.os.ai.LocalAICore
+import com.devilking.os.ai.AIContext
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     
     private lateinit var commandExecutor: CommandExecutor
     private lateinit var aiCore: LocalAICore
+    private lateinit var aiContext: AIContext
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,9 +32,9 @@ class MainActivity : AppCompatActivity() {
         etCommandInput = findViewById(R.id.et_command_input)
         scrollView = findViewById(R.id.scroll_view)
         
-        // Initialize Muscle and Brain
         commandExecutor = CommandExecutor(this)
         aiCore = LocalAICore()
+        aiContext = AIContext()
 
         setupInputListener()
     }
@@ -43,6 +46,7 @@ class MainActivity : AppCompatActivity() {
                 
                 val rawInput = etCommandInput.text.toString().trim()
                 if (rawInput.isNotEmpty()) {
+                    etCommandInput.isEnabled = false // Lock input while thinking
                     processCommand(rawInput)
                 }
                 true
@@ -64,16 +68,43 @@ class MainActivity : AppCompatActivity() {
             "open" -> {
                 if (target.isNotEmpty()) {
                     printToTerminal(commandExecutor.launchApp(target))
-                } else {
-                    printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
-                }
+                } else printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
+                etCommandInput.isEnabled = true
             }
-            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - clear (Wipe screen)")
-            "clear" -> tvTerminalOutput.text = ""
-            "core" -> printToTerminal(aiCore.checkCoreStatus())
+            "help" -> {
+                printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - clear (Wipe screen)")
+                etCommandInput.isEnabled = true
+            }
+            "clear" -> {
+                tvTerminalOutput.text = ""
+                etCommandInput.isEnabled = true
+            }
+            "core" -> {
+                printToTerminal(aiCore.checkCoreStatus())
+                etCommandInput.isEnabled = true
+            }
+            else -> processAICommand(input)
+        }
+    }
+
+    private fun processAICommand(input: String) {
+        // 1. Show thinking animation on Main Thread
+        printToTerminal("> [DEVILKING AI]: Processing intent...")
+        
+        // 2. Push heavy lifting to Background Thread so phone doesn't freeze
+        thread {
+            val fullPrompt = aiContext.buildPrompt(input)
+            val response = aiCore.generateResponse(input) // Will connect to C++ later
             
-            // If it's not a system command, send it to the AI
-            else -> printToTerminal(aiCore.generateResponse(input))
+            // 3. Save to Short-Term Memory
+            aiContext.addInteraction(input, response)
+            
+            // 4. Push answer back to Main Thread UI
+            runOnUiThread {
+                printToTerminal(response)
+                etCommandInput.isEnabled = true // Unlock keyboard
+                etCommandInput.requestFocus()
+            }
         }
     }
 
