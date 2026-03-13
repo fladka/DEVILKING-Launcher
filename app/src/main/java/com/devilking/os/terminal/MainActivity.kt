@@ -8,13 +8,16 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.devilking.os.execution.CommandExecutor
+import com.devilking.os.ai.LocalAICore
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var tvTerminalOutput: TextView
     private lateinit var etCommandInput: EditText
     private lateinit var scrollView: ScrollView
+    
     private lateinit var commandExecutor: CommandExecutor
+    private lateinit var aiCore: LocalAICore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,8 +29,9 @@ class MainActivity : AppCompatActivity() {
         etCommandInput = findViewById(R.id.et_command_input)
         scrollView = findViewById(R.id.scroll_view)
         
-        // Initialize the Muscle
+        // Initialize Muscle and Brain
         commandExecutor = CommandExecutor(this)
+        aiCore = LocalAICore()
 
         setupInputListener()
     }
@@ -52,7 +56,6 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("root@devilking:~# $input")
         etCommandInput.text.clear()
 
-        // Split "open youtube" into ["open", "youtube"]
         val parts = input.split(Regex("\\s+"), 2)
         val command = parts[0].lowercase()
         val target = if (parts.size > 1) parts[1] else ""
@@ -62,12 +65,15 @@ class MainActivity : AppCompatActivity() {
                 if (target.isNotEmpty()) {
                     printToTerminal(commandExecutor.launchApp(target))
                 } else {
-                    printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target (e.g., 'open camera')")
+                    printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
                 }
             }
-            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - clear (Wipe screen)")
+            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - clear (Wipe screen)")
             "clear" -> tvTerminalOutput.text = ""
-            else -> printToTerminal("> [!] UNKNOWN COMMAND: '$command'.")
+            "core" -> printToTerminal(aiCore.checkCoreStatus())
+            
+            // If it's not a system command, send it to the AI
+            else -> printToTerminal(aiCore.generateResponse(input))
         }
     }
 
