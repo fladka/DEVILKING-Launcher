@@ -8,11 +8,12 @@ android {
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.devilking.os.terminal"
+        // FORGED ID: Bypasses corrupted install caches
+        applicationId "com.devilking.os.v3"
         minSdk 26
         targetSdk 33
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "3.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
