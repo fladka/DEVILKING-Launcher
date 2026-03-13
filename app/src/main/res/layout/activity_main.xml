@@ -20,7 +20,7 @@
             android:textColor="#00FF00"
             android:textSize="14sp"
             android:fontFamily="monospace"
-            android:text="> DEVILKING OS [Version 1.0.0]\n> Architecture: 1B Local Core / Absolute Zero\n> System Initialized. Standing by.\n\n" />
+            android:text="> DEVILKING OS [Version 1.0.1]\n> SECURITY BYPASS SUCCESSFUL\n> Terminal Input: ONLINE\n\n" />
     </ScrollView>
 
     <LinearLayout
