@@ -7,12 +7,14 @@ import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.devilking.os.execution.CommandExecutor
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var tvTerminalOutput: TextView
     private lateinit var etCommandInput: EditText
     private lateinit var scrollView: ScrollView
+    private lateinit var commandExecutor: CommandExecutor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,6 +25,9 @@ class MainActivity : AppCompatActivity() {
         tvTerminalOutput = findViewById(R.id.tv_terminal_output)
         etCommandInput = findViewById(R.id.et_command_input)
         scrollView = findViewById(R.id.scroll_view)
+        
+        // Initialize the Muscle
+        commandExecutor = CommandExecutor(this)
 
         setupInputListener()
     }
@@ -47,10 +52,22 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("root@devilking:~# $input")
         etCommandInput.text.clear()
 
-        when (input.lowercase()) {
-            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - clear (Wipe screen)\n  - stealth (Dummy command)")
+        // Split "open youtube" into ["open", "youtube"]
+        val parts = input.split(Regex("\\s+"), 2)
+        val command = parts[0].lowercase()
+        val target = if (parts.size > 1) parts[1] else ""
+
+        when (command) {
+            "open" -> {
+                if (target.isNotEmpty()) {
+                    printToTerminal(commandExecutor.launchApp(target))
+                } else {
+                    printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target (e.g., 'open camera')")
+                }
+            }
+            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - clear (Wipe screen)")
             "clear" -> tvTerminalOutput.text = ""
-            else -> printToTerminal("> [!] UNKNOWN COMMAND: '$input'. Waiting for core logic.")
+            else -> printToTerminal("> [!] UNKNOWN COMMAND: '$command'.")
         }
     }
 

@@ -7,18 +7,16 @@ class CommandExecutor(private val context: Context) {
 
     fun launchApp(appName: String): String {
         val pm = context.packageManager
-        // Ask Android for a list of all installed apps
         val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
         
         for (appInfo in packages) {
             val name = pm.getApplicationLabel(appInfo).toString().lowercase()
             
-            // If the name matches what you typed (e.g., "youtube")
             if (name == appName.lowercase()) {
                 val launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName)
                 if (launchIntent != null) {
                     context.startActivity(launchIntent)
-                    return "> EXECUTION: Launching '$appName' [${appInfo.packageName}]"
+                    return "> EXECUTION: Launching '$appName'..."
                 }
             }
         }
