@@ -2,6 +2,8 @@ package com.devilking.os.ai
 
 import android.content.Context
 import java.io.File
+import java.io.InputStream
+import java.io.FileOutputStream
 
 class LocalAICore(private val context: Context) {
 
@@ -12,64 +14,64 @@ class LocalAICore(private val context: Context) {
     private external fun stringFromJNI(): String
     private external fun loadModelFromJNI(path: String): String
 
-    private val modelPaths = listOf(
-        "/storage/emulated/0/DEVILKING_AI/llama-3.2-1b-instruct-q4_k_m.gguf",
-        "/storage/emulated/0/Download/DEVILKING_AI/llama-3.2-1b-instruct-q4_k_m.gguf",
-        "/storage/emulated/0/Documents/DEVILKING_AI/llama-3.2-1b-instruct-q4_k_m.gguf"
-    )
-
-    private var activeModelPath: String? = null
     private var isModelLoaded = false
 
     fun checkCoreStatus(): String {
-        for (path in modelPaths) {
-            if (File(path).exists()) {
-                activeModelPath = path
-                return "> NEURAL CORE LOCATED at: $path\n> Status: Ready for Internal Transfer."
-            }
+        val privateFile = File(context.filesDir, "brain.gguf")
+        return if (privateFile.exists() && privateFile.length() > 100 * 1024 * 1024) {
+            "> NEURAL CORE LOCATED in Private Vault.\n> Status: Ready for Inference."
+        } else {
+            "> [!] NEURAL CORE OFFLINE: Type 'inject core' to load the AI."
         }
-        return "> [!] NEURAL CORE OFFLINE: Model not found."
+    }
+
+    // The new VIP Stream Injector
+    fun injectFromStream(inputStream: InputStream): String {
+        val privateFile = File(context.filesDir, "brain.gguf")
+        
+        try {
+            // Ghost Eraser
+            if (privateFile.exists() && privateFile.length() < 100 * 1024 * 1024) {
+                privateFile.delete()
+            }
+            
+            if (!privateFile.exists()) {
+                val outputStream = FileOutputStream(privateFile)
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    outputStream.write(buffer, 0, bytesRead)
+                }
+                outputStream.flush()
+                outputStream.close()
+                inputStream.close()
+            }
+            
+            val sizeMB = privateFile.length() / (1024 * 1024)
+            val result = loadModelFromJNI(privateFile.absolutePath)
+            
+            if (result.contains("successfully")) {
+                isModelLoaded = true
+            }
+            return "$result \n> (Vault File Size Verified: ${sizeMB}MB)"
+            
+        } catch (e: Exception) {
+            return "> [!] KOTLIN STREAM ERROR: Failed to copy the file. ${e.message}"
+        }
     }
 
     fun generateResponse(prompt: String): String {
-        if (prompt.lowercase() == "ping cpp") {
-            return stringFromJNI()
-        }
+        if (prompt.lowercase() == "ping cpp") return stringFromJNI()
         
-        if (prompt.lowercase() == "inject core") {
-            if (activeModelPath == null) checkCoreStatus()
-            
-            if (activeModelPath != null) {
-                val privateVaultDir = context.filesDir
-                val privateFile = File(privateVaultDir, "brain.gguf")
-                
-                // GHOST ERASER: If the file exists but is less than 100MB, it's corrupted. Delete it.
-                if (privateFile.exists() && privateFile.length() < 100 * 1024 * 1024) {
-                    privateFile.delete()
-                }
-                
-                if (!privateFile.exists()) {
-                    try {
-                        File(activeModelPath!!).copyTo(privateFile, overwrite = true)
-                    } catch (e: Exception) {
-                        return "> [!] KOTLIN ERROR: Failed to copy the file. ${e.message}"
-                    }
-                }
-                
-                val sizeMB = privateFile.length() / (1024 * 1024)
-                
-                // Injecting from the safe Private Vault
-                val result = loadModelFromJNI(privateFile.absolutePath)
-                if (result.contains("successfully")) {
-                    isModelLoaded = true
-                }
-                return "$result \n> (Vault File Size Verified: ${sizeMB}MB)"
-            }
-            return "> [!] Cannot inject: Core file not found."
-        }
-
         if (!isModelLoaded) {
-            return "> [!] CORE NOT INJECTED: Type 'inject core' to load the AI into RAM."
+            // Check if it's already in the vault from a previous successful run
+            val privateFile = File(context.filesDir, "brain.gguf")
+            if (privateFile.exists() && privateFile.length() > 100 * 1024 * 1024) {
+                val result = loadModelFromJNI(privateFile.absolutePath)
+                if (result.contains("successfully")) isModelLoaded = true
+                return result
+            }
+            return "> [!] CORE NOT INJECTED: Type 'inject core' to load the AI."
         }
 
         return "> [DEVILKING AI]: I am alive in your RAM! (Awaiting Inference Loop Update...)"

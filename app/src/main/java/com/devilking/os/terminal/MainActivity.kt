@@ -1,11 +1,13 @@
 package com.devilking.os.terminal
 
+import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.devilking.os.execution.CommandExecutor
 import com.devilking.os.ai.LocalAICore
@@ -22,10 +24,37 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiCore: LocalAICore
     private lateinit var aiContext: AIContext
 
+    // The VIP File Picker
+    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            printToTerminal("> [SYSTEM]: File selected. Commencing secure vault transfer...")
+            thread {
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val response = aiCore.injectFromStream(inputStream)
+                        runOnUiThread {
+                            printToTerminal(response)
+                            etCommandInput.isEnabled = true
+                            etCommandInput.requestFocus()
+                        }
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        printToTerminal("> [!] ERROR: ${e.message}")
+                        etCommandInput.isEnabled = true
+                    }
+                }
+            }
+        } else {
+            printToTerminal("> [!] ACTION ABORTED: No file selected.")
+            etCommandInput.isEnabled = true
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
         supportActionBar?.hide()
 
         tvTerminalOutput = findViewById(R.id.tv_terminal_output)
@@ -33,10 +62,7 @@ class MainActivity : AppCompatActivity() {
         scrollView = findViewById(R.id.scroll_view)
         
         commandExecutor = CommandExecutor(this)
-        
-        // Passing the 'Context' so the Brain can access the Private Vault
         aiCore = LocalAICore(this) 
-        
         aiContext = AIContext()
 
         setupInputListener()
@@ -53,9 +79,7 @@ class MainActivity : AppCompatActivity() {
                     processCommand(rawInput)
                 }
                 true
-            } else {
-                false
-            }
+            } else false
         }
     }
 
@@ -69,9 +93,8 @@ class MainActivity : AppCompatActivity() {
 
         when (command) {
             "open" -> {
-                if (target.isNotEmpty()) {
-                    printToTerminal(commandExecutor.launchApp(target))
-                } else printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
+                if (target.isNotEmpty()) printToTerminal(commandExecutor.launchApp(target))
+                else printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
                 etCommandInput.isEnabled = true
             }
             "help" -> {
@@ -86,20 +109,23 @@ class MainActivity : AppCompatActivity() {
                 printToTerminal(aiCore.checkCoreStatus())
                 etCommandInput.isEnabled = true
             }
+            "inject" -> {
+                if (target == "core") {
+                    printToTerminal("> [DEVILKING AI]: Requesting secure file selection...")
+                    filePickerLauncher.launch(arrayOf("*/*")) // Opens Android File Manager
+                } else {
+                    printToTerminal("> [!] SYNTAX ERROR: Did you mean 'inject core'?")
+                    etCommandInput.isEnabled = true
+                }
+            }
             else -> processAICommand(input)
         }
     }
 
     private fun processAICommand(input: String) {
         printToTerminal("> [DEVILKING AI]: Processing intent...")
-        
         thread {
             val response = aiCore.generateResponse(input) 
-            
-            if (aiCore.checkCoreStatus().contains("LOCATED") && input.lowercase() != "inject core" && input.lowercase() != "ping cpp") {
-               aiContext.addInteraction(input, response)
-            }
-            
             runOnUiThread {
                 printToTerminal(response)
                 etCommandInput.isEnabled = true 
@@ -110,8 +136,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun printToTerminal(text: String) {
         tvTerminalOutput.append(text + "\n")
-        scrollView.post {
-            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
-        }
+        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 }
