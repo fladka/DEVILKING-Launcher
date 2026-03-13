@@ -13,6 +13,8 @@ class LocalAICore(private val context: Context) {
 
     private external fun stringFromJNI(): String
     private external fun loadModelFromJNI(path: String): String
+    // Link to the Final Boss C++ function
+    private external fun generateResponseFromJNI(prompt: String): String 
 
     private var isModelLoaded = false
 
@@ -25,15 +27,11 @@ class LocalAICore(private val context: Context) {
         }
     }
 
-    // The new VIP Stream Injector
     fun injectFromStream(inputStream: InputStream): String {
         val privateFile = File(context.filesDir, "brain.gguf")
         
         try {
-            // Ghost Eraser
-            if (privateFile.exists() && privateFile.length() < 100 * 1024 * 1024) {
-                privateFile.delete()
-            }
+            if (privateFile.exists() && privateFile.length() < 100 * 1024 * 1024) privateFile.delete()
             
             if (!privateFile.exists()) {
                 val outputStream = FileOutputStream(privateFile)
@@ -50,9 +48,7 @@ class LocalAICore(private val context: Context) {
             val sizeMB = privateFile.length() / (1024 * 1024)
             val result = loadModelFromJNI(privateFile.absolutePath)
             
-            if (result.contains("successfully")) {
-                isModelLoaded = true
-            }
+            if (result.contains("successfully")) isModelLoaded = true
             return "$result \n> (Vault File Size Verified: ${sizeMB}MB)"
             
         } catch (e: Exception) {
@@ -64,16 +60,22 @@ class LocalAICore(private val context: Context) {
         if (prompt.lowercase() == "ping cpp") return stringFromJNI()
         
         if (!isModelLoaded) {
-            // Check if it's already in the vault from a previous successful run
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 100 * 1024 * 1024) {
                 val result = loadModelFromJNI(privateFile.absolutePath)
                 if (result.contains("successfully")) isModelLoaded = true
-                return result
+                else return result
+            } else {
+                return "> [!] CORE NOT INJECTED: Type 'inject core' to load the AI."
             }
-            return "> [!] CORE NOT INJECTED: Type 'inject core' to load the AI."
         }
 
-        return "> [DEVILKING AI]: I am alive in your RAM! (Awaiting Inference Loop Update...)"
+        // Llama 3.2 Instruct Formatting so the AI knows to answer you
+        val formattedPrompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        
+        // Send the prompt down into the C++ Engine!
+        val rawAnswer = generateResponseFromJNI(formattedPrompt)
+        
+        return "> [DEVILKING AI]: $rawAnswer"
     }
 }
