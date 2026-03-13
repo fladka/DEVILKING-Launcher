@@ -33,7 +33,10 @@ class MainActivity : AppCompatActivity() {
         scrollView = findViewById(R.id.scroll_view)
         
         commandExecutor = CommandExecutor(this)
-        aiCore = LocalAICore()
+        
+        // Passing the 'Context' so the Brain can access the Private Vault
+        aiCore = LocalAICore(this) 
+        
         aiContext = AIContext()
 
         setupInputListener()
@@ -46,7 +49,7 @@ class MainActivity : AppCompatActivity() {
                 
                 val rawInput = etCommandInput.text.toString().trim()
                 if (rawInput.isNotEmpty()) {
-                    etCommandInput.isEnabled = false // Lock input while thinking
+                    etCommandInput.isEnabled = false 
                     processCommand(rawInput)
                 }
                 true
@@ -72,7 +75,7 @@ class MainActivity : AppCompatActivity() {
                 etCommandInput.isEnabled = true
             }
             "help" -> {
-                printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - clear (Wipe screen)")
+                printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - inject core (Load AI)\n  - clear (Wipe screen)")
                 etCommandInput.isEnabled = true
             }
             "clear" -> {
@@ -88,21 +91,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processAICommand(input: String) {
-        // 1. Show thinking animation on Main Thread
         printToTerminal("> [DEVILKING AI]: Processing intent...")
         
-        // 2. Push heavy lifting to Background Thread so phone doesn't freeze
         thread {
-            val fullPrompt = aiContext.buildPrompt(input)
-            val response = aiCore.generateResponse(input) // Will connect to C++ later
+            val response = aiCore.generateResponse(input) 
             
-            // 3. Save to Short-Term Memory
-            aiContext.addInteraction(input, response)
+            if (aiCore.checkCoreStatus().contains("LOCATED") && input.lowercase() != "inject core" && input.lowercase() != "ping cpp") {
+               aiContext.addInteraction(input, response)
+            }
             
-            // 4. Push answer back to Main Thread UI
             runOnUiThread {
                 printToTerminal(response)
-                etCommandInput.isEnabled = true // Unlock keyboard
+                etCommandInput.isEnabled = true 
                 etCommandInput.requestFocus()
             }
         }

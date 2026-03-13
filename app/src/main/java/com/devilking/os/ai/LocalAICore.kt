@@ -1,15 +1,16 @@
 package com.devilking.os.ai
 
+import android.content.Context
 import java.io.File
 
-class LocalAICore {
+class LocalAICore(private val context: Context) {
 
     init {
         System.loadLibrary("devilking_engine")
     }
 
     private external fun stringFromJNI(): String
-    private external fun loadModelFromJNI(path: String): String // The new C++ function
+    private external fun loadModelFromJNI(path: String): String
 
     private val modelPaths = listOf(
         "/storage/emulated/0/DEVILKING_AI/llama-3.2-1b-instruct-q4_k_m.gguf",
@@ -24,7 +25,7 @@ class LocalAICore {
         for (path in modelPaths) {
             if (File(path).exists()) {
                 activeModelPath = path
-                return "> NEURAL CORE LOCATED at: $path\n> Status: Ready for Memory Injection."
+                return "> NEURAL CORE LOCATED at: $path\n> Status: Ready for Internal Transfer."
             }
         }
         return "> [!] NEURAL CORE OFFLINE: Model not found."
@@ -35,12 +36,24 @@ class LocalAICore {
             return stringFromJNI()
         }
         
-        // THE INJECTION COMMAND
         if (prompt.lowercase() == "inject core") {
             if (activeModelPath == null) checkCoreStatus()
             
             if (activeModelPath != null) {
-                val result = loadModelFromJNI(activeModelPath!!)
+                // The Smuggle Protocol: Copying to the C++ Private Vault
+                val privateVaultDir = context.filesDir
+                val privateFile = File(privateVaultDir, "brain.gguf")
+                
+                if (!privateFile.exists()) {
+                    try {
+                        File(activeModelPath!!).copyTo(privateFile)
+                    } catch (e: Exception) {
+                        return "> [!] KOTLIN ERROR: Failed to copy the file to the Private Vault. ${e.message}"
+                    }
+                }
+                
+                // Injecting from the safe Private Vault
+                val result = loadModelFromJNI(privateFile.absolutePath)
                 if (result.contains("successfully")) {
                     isModelLoaded = true
                 }
@@ -49,7 +62,6 @@ class LocalAICore {
             return "> [!] Cannot inject: Core file not found."
         }
 
-        // Safety lock: prevents you from talking to the AI before it's loaded
         if (!isModelLoaded) {
             return "> [!] CORE NOT INJECTED: Type 'inject core' to load the AI into RAM."
         }
