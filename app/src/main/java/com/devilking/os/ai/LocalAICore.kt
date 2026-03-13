@@ -40,24 +40,30 @@ class LocalAICore(private val context: Context) {
             if (activeModelPath == null) checkCoreStatus()
             
             if (activeModelPath != null) {
-                // The Smuggle Protocol: Copying to the C++ Private Vault
                 val privateVaultDir = context.filesDir
                 val privateFile = File(privateVaultDir, "brain.gguf")
                 
+                // GHOST ERASER: If the file exists but is less than 100MB, it's corrupted. Delete it.
+                if (privateFile.exists() && privateFile.length() < 100 * 1024 * 1024) {
+                    privateFile.delete()
+                }
+                
                 if (!privateFile.exists()) {
                     try {
-                        File(activeModelPath!!).copyTo(privateFile)
+                        File(activeModelPath!!).copyTo(privateFile, overwrite = true)
                     } catch (e: Exception) {
-                        return "> [!] KOTLIN ERROR: Failed to copy the file to the Private Vault. ${e.message}"
+                        return "> [!] KOTLIN ERROR: Failed to copy the file. ${e.message}"
                     }
                 }
+                
+                val sizeMB = privateFile.length() / (1024 * 1024)
                 
                 // Injecting from the safe Private Vault
                 val result = loadModelFromJNI(privateFile.absolutePath)
                 if (result.contains("successfully")) {
                     isModelLoaded = true
                 }
-                return result
+                return "$result \n> (Vault File Size Verified: ${sizeMB}MB)"
             }
             return "> [!] Cannot inject: Core file not found."
         }
