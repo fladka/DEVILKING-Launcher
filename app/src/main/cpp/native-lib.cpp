@@ -7,9 +7,6 @@
 #include "llama.h"
 
 struct llama_model * model = nullptr;
-llama_context * ctx = nullptr; // Keep context alive in memory
-std::vector<llama_token> system_tokens; // Store the system prompt memory
-int system_token_count = 0;
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_devilking_os_ai_LocalAICore_stringFromJNI(JNIEnv* env, jobject) {
@@ -34,53 +31,36 @@ Java_com_devilking_os_ai_LocalAICore_loadModelFromJNI(JNIEnv* env, jobject, jstr
     env->ReleaseStringUTFChars(path, model_path);
 
     if (model == nullptr) return env->NewStringUTF("> [!] FATAL ERROR: Core rejected.");
-
-    // Initialize the continuous context
-    llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 1024; 
-    ctx_params.n_threads = 4; 
-    ctx_params.n_threads_batch = 4;
-    ctx = llama_new_context_with_model(model, ctx_params);
-
-    // INJECT THE IDENTITY DIRECTLY INTO C++ MEMORY (KV CACHE)
-    const char * system_prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are DEVILKING OS, a high-performance terminal AI. Your goal is hardware optimization, system defense, and process management. You use a cold, technical hacker persona.<|eot_id|>";
-    
-    const llama_vocab * vocab = llama_model_get_vocab(model);
-    system_tokens.resize(1024);
-    system_token_count = llama_tokenize(vocab, system_prompt, strlen(system_prompt), system_tokens.data(), system_tokens.size(), true, true);
-    if (system_token_count < 0) {
-        system_token_count = -system_token_count;
-        system_tokens.resize(system_token_count);
-        llama_tokenize(vocab, system_prompt, strlen(system_prompt), system_tokens.data(), system_tokens.size(), true, true);
-    } else system_tokens.resize(system_token_count);
-
-    // Pre-calculate the math for the persona and save it in RAM
-    llama_batch batch = llama_batch_get_one(system_tokens.data(), system_tokens.size());
-    llama_decode(ctx, batch);
-
-    return env->NewStringUTF("> [DEVILKING AI]: Neural Core stabilized. KV Cache Pre-loaded.");
+    return env->NewStringUTF("> [DEVILKING AI]: Neural Core stabilized. Active Cooling engaged.");
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobject, jstring prompt) {
-    if (model == nullptr || ctx == nullptr) return env->NewStringUTF("ERROR: Core not in RAM.");
+    if (model == nullptr) return env->NewStringUTF("ERROR: Core not in RAM.");
 
     const char * prompt_c = env->GetStringUTFChars(prompt, nullptr);
     std::string result_text = "";
 
-    // Format the user question to attach to the pre-loaded memory
-    std::string formatted_prompt = "<|start_header_id|>user<|end_header_id|>\n\n" + std::string(prompt_c) + "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n";
+    llama_context_params ctx_params = llama_context_default_params();
+    ctx_params.n_ctx = 512; 
+    ctx_params.n_threads = 4; 
+    ctx_params.n_threads_batch = 4;
+
+    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    if (ctx == nullptr) {
+        env->ReleaseStringUTFChars(prompt, prompt_c);
+        return env->NewStringUTF("ERROR: Context failure.");
+    }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
     std::vector<llama_token> tokens(512);
-    int n_tokens = llama_tokenize(vocab, formatted_prompt.c_str(), formatted_prompt.length(), tokens.data(), tokens.size(), false, true);
+    int n_tokens = llama_tokenize(vocab, prompt_c, strlen(prompt_c), tokens.data(), tokens.size(), true, true);
     if (n_tokens < 0) {
         n_tokens = -n_tokens;
         tokens.resize(n_tokens);
-        llama_tokenize(vocab, formatted_prompt.c_str(), formatted_prompt.length(), tokens.data(), tokens.size(), false, true);
+        llama_tokenize(vocab, prompt_c, strlen(prompt_c), tokens.data(), tokens.size(), true, true);
     } else tokens.resize(n_tokens);
 
-    // We start calculating FROM the end of the system prompt memory
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     llama_decode(ctx, batch);
 
@@ -109,9 +89,7 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
     }
 
-    // Wipe ONLY the user prompt memory so the next question is fresh, but keep the persona memory
-    llama_kv_cache_seq_rm(ctx, 0, system_token_count, -1); 
-
+    llama_free(ctx);
     env->ReleaseStringUTFChars(prompt, prompt_c);
     return env->NewStringUTF(result_text.c_str());
 }

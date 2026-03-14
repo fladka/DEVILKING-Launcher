@@ -42,10 +42,7 @@ class LocalAICore(private val context: Context) {
                 inputStream.close()
             }
             val result = loadModelFromJNI(privateFile.absolutePath)
-            
-            // THE BUG FIX: Kotlin now looks for the word "stabilized" 
             if (result.contains("stabilized")) isModelLoaded = true
-            
             return result
         } catch (e: Exception) {
             return "> [!] KOTLIN STREAM ERROR: ${e.message}"
@@ -59,16 +56,15 @@ class LocalAICore(private val context: Context) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 100 * 1024 * 1024) {
                 val result = loadModelFromJNI(privateFile.absolutePath)
-                
-                // THE BUG FIX: Kotlin now looks for the word "stabilized"
                 if (result.contains("stabilized")) isModelLoaded = true
                 else return result
             } else return "> [!] CORE NOT INJECTED."
         }
 
+        // COMPRESSED IDENTITY: 9 words instead of 40 to slash math requirements
+        val systemPrompt = "You are DEVILKING OS, a cold system terminal."
         
-        
-        val formattedPrompt = prompt
+        val formattedPrompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
         
         val rawAnswer = generateResponseFromJNI(formattedPrompt)
         return "> [DEVILKING AI]: $rawAnswer"
