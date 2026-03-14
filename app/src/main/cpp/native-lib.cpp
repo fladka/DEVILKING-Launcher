@@ -15,67 +15,57 @@ Java_com_devilking_os_ai_LocalAICore_stringFromJNI(JNIEnv* env, jobject) {
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_devilking_os_ai_LocalAICore_loadModelFromJNI(JNIEnv* env, jobject, jstring path) {
     const char * model_path = env->GetStringUTFChars(path, nullptr);
-
     std::ifstream file(model_path);
     if (!file.good()) {
         env->ReleaseStringUTFChars(path, model_path);
-        return env->NewStringUTF("> [!] C++ ERROR: The engine cannot physically open the file in the Vault.");
+        return env->NewStringUTF("> [!] C++ ERROR: Vault access denied.");
     }
     file.close();
 
     llama_backend_init();
     llama_model_params model_params = llama_model_default_params();
-    model_params.use_mmap = false; 
+    model_params.use_mmap = true; 
     
     model = llama_load_model_from_file(model_path, model_params);
     env->ReleaseStringUTFChars(path, model_path);
 
-    if (model == nullptr) {
-        return env->NewStringUTF("> [!] FATAL ERROR: llama.cpp engine rejected the file.");
-    }
-    return env->NewStringUTF("> [DEVILKING AI]: Neural Core successfully injected into physical RAM! System is stabilized.");
+    if (model == nullptr) return env->NewStringUTF("> [!] FATAL ERROR: Core rejected.");
+    return env->NewStringUTF("> [DEVILKING AI]: Neural Core stabilized. Thermal limit set to 100.");
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobject, jstring prompt) {
-    if (model == nullptr) return env->NewStringUTF("ERROR: Model not loaded in RAM.");
+    if (model == nullptr) return env->NewStringUTF("ERROR: Core not in RAM.");
 
     const char * prompt_c = env->GetStringUTFChars(prompt, nullptr);
     std::string result_text = "";
 
     llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 1024;
-    
-    // --- THE SPEED HACK ---
-    // Force the engine to use 4 CPU threads (utilizing your Snapdragon's multi-core architecture)
+    ctx_params.n_ctx = 512; 
     ctx_params.n_threads = 4; 
     ctx_params.n_threads_batch = 4;
-    // ----------------------
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
-    
     if (ctx == nullptr) {
         env->ReleaseStringUTFChars(prompt, prompt_c);
-        return env->NewStringUTF("ERROR: Context allocation failure.");
+        return env->NewStringUTF("ERROR: Context failure.");
     }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
-    
-    std::vector<llama_token> tokens(1024);
+    std::vector<llama_token> tokens(512);
     int n_tokens = llama_tokenize(vocab, prompt_c, strlen(prompt_c), tokens.data(), tokens.size(), true, true);
     if (n_tokens < 0) {
         n_tokens = -n_tokens;
         tokens.resize(n_tokens);
         llama_tokenize(vocab, prompt_c, strlen(prompt_c), tokens.data(), tokens.size(), true, true);
-    } else {
-        tokens.resize(n_tokens);
-    }
+    } else tokens.resize(n_tokens);
 
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     llama_decode(ctx, batch);
 
-    for (int i = 0; i < 150; i++) {
-        
+    // --- THERMAL SAFETY LIMIT ---
+    // Cap set to 100 tokens to prevent overheating
+    for (int i = 0; i < 100; i++) {
         float * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
         int n_vocab = llama_vocab_n_tokens(vocab);
         
@@ -88,22 +78,17 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
             }
         }
         
-        if (new_token_id == llama_vocab_eos(vocab)) {
-            break;
-        }
+        if (new_token_id == llama_vocab_eos(vocab)) break;
 
         char buf[128];
         int n_chars = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
-        if (n_chars > 0) {
-            result_text += std::string(buf, n_chars);
-        }
+        if (n_chars > 0) result_text += std::string(buf, n_chars);
 
         batch = llama_batch_get_one(&new_token_id, 1);
-        llama_decode(ctx, batch);
+        if (llama_decode(ctx, batch) != 0) break;
     }
 
     llama_free(ctx);
     env->ReleaseStringUTFChars(prompt, prompt_c);
-
     return env->NewStringUTF(result_text.c_str());
 }
