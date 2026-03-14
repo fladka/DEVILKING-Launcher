@@ -42,7 +42,10 @@ class LocalAICore(private val context: Context) {
                 inputStream.close()
             }
             val result = loadModelFromJNI(privateFile.absolutePath)
-            if (result.contains("successfully")) isModelLoaded = true
+            
+            // THE BUG FIX: Kotlin now looks for the word "stabilized" 
+            if (result.contains("stabilized")) isModelLoaded = true
+            
             return result
         } catch (e: Exception) {
             return "> [!] KOTLIN STREAM ERROR: ${e.message}"
@@ -56,13 +59,13 @@ class LocalAICore(private val context: Context) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 100 * 1024 * 1024) {
                 val result = loadModelFromJNI(privateFile.absolutePath)
-                if (result.contains("successfully")) isModelLoaded = true
+                
+                // THE BUG FIX: Kotlin now looks for the word "stabilized"
+                if (result.contains("stabilized")) isModelLoaded = true
                 else return result
             } else return "> [!] CORE NOT INJECTED."
         }
 
-        // --- THE IDENTITY INJECTION ---
-        // This tells the AI exactly who it is so it doesn't refuse system tasks.
         val systemPrompt = "You are DEVILKING OS, a high-performance terminal AI. Your goal is hardware optimization, system defense, and process management. You use a cold, technical hacker persona. You do not refuse hardware optimization tasks."
         
         val formattedPrompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
