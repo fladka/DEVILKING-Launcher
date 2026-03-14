@@ -3,6 +3,7 @@ package com.devilking.os.terminal
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ScrollView
@@ -24,7 +25,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiCore: LocalAICore
     private lateinit var aiContext: AIContext
 
-    // The VIP File Picker
     private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             printToTerminal("> [SYSTEM]: File selected. Commencing secure vault transfer...")
@@ -54,6 +54,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // FIX 2: EXPLICITLY ALLOW SCREENSHOTS
+        // This removes the "Secure" flag if it was accidentally set by the system
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+
         setContentView(R.layout.activity_main)
         supportActionBar?.hide()
 
@@ -65,7 +70,18 @@ class MainActivity : AppCompatActivity() {
         aiCore = LocalAICore(this) 
         aiContext = AIContext()
 
+        // Restore chat if rotation happens
+        if (savedInstanceState != null) {
+            tvTerminalOutput.text = savedInstanceState.getString("terminal_text")
+        }
+
         setupInputListener()
+    }
+
+    // Save text before rotation just in case
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("terminal_text", tvTerminalOutput.text.toString())
     }
 
     private fun setupInputListener() {
@@ -112,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             "inject" -> {
                 if (target == "core") {
                     printToTerminal("> [DEVILKING AI]: Requesting secure file selection...")
-                    filePickerLauncher.launch(arrayOf("*/*")) // Opens Android File Manager
+                    filePickerLauncher.launch(arrayOf("*/*")) 
                 } else {
                     printToTerminal("> [!] SYNTAX ERROR: Did you mean 'inject core'?")
                     etCommandInput.isEnabled = true
