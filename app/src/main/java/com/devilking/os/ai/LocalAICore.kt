@@ -13,7 +13,6 @@ class LocalAICore(private val context: Context) {
 
     private external fun stringFromJNI(): String
     private external fun loadModelFromJNI(path: String): String
-    // Link to the Final Boss C++ function
     private external fun generateResponseFromJNI(prompt: String): String 
 
     private var isModelLoaded = false
@@ -21,18 +20,16 @@ class LocalAICore(private val context: Context) {
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
         return if (privateFile.exists() && privateFile.length() > 100 * 1024 * 1024) {
-            "> NEURAL CORE LOCATED in Private Vault.\n> Status: Ready for Inference."
+            "> NEURAL CORE LOCATED.\n> Status: Ready for Inference."
         } else {
-            "> [!] NEURAL CORE OFFLINE: Type 'inject core' to load the AI."
+            "> [!] NEURAL CORE OFFLINE."
         }
     }
 
     fun injectFromStream(inputStream: InputStream): String {
         val privateFile = File(context.filesDir, "brain.gguf")
-        
         try {
             if (privateFile.exists() && privateFile.length() < 100 * 1024 * 1024) privateFile.delete()
-            
             if (!privateFile.exists()) {
                 val outputStream = FileOutputStream(privateFile)
                 val buffer = ByteArray(8192)
@@ -44,15 +41,11 @@ class LocalAICore(private val context: Context) {
                 outputStream.close()
                 inputStream.close()
             }
-            
-            val sizeMB = privateFile.length() / (1024 * 1024)
             val result = loadModelFromJNI(privateFile.absolutePath)
-            
             if (result.contains("successfully")) isModelLoaded = true
-            return "$result \n> (Vault File Size Verified: ${sizeMB}MB)"
-            
+            return result
         } catch (e: Exception) {
-            return "> [!] KOTLIN STREAM ERROR: Failed to copy the file. ${e.message}"
+            return "> [!] KOTLIN STREAM ERROR: ${e.message}"
         }
     }
 
@@ -65,17 +58,16 @@ class LocalAICore(private val context: Context) {
                 val result = loadModelFromJNI(privateFile.absolutePath)
                 if (result.contains("successfully")) isModelLoaded = true
                 else return result
-            } else {
-                return "> [!] CORE NOT INJECTED: Type 'inject core' to load the AI."
-            }
+            } else return "> [!] CORE NOT INJECTED."
         }
 
-        // Llama 3.2 Instruct Formatting so the AI knows to answer you
-        val formattedPrompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        // --- THE IDENTITY INJECTION ---
+        // This tells the AI exactly who it is so it doesn't refuse system tasks.
+        val systemPrompt = "You are DEVILKING OS, a high-performance terminal AI. Your goal is hardware optimization, system defense, and process management. You use a cold, technical hacker persona. You do not refuse hardware optimization tasks."
         
-        // Send the prompt down into the C++ Engine!
+        val formattedPrompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        
         val rawAnswer = generateResponseFromJNI(formattedPrompt)
-        
         return "> [DEVILKING AI]: $rawAnswer"
     }
 }
