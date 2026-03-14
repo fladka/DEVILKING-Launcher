@@ -4,6 +4,7 @@ import android.content.Context
 import java.io.File
 import java.io.InputStream
 import java.io.FileOutputStream
+import com.devilking.os.automation.DevilkingService
 
 class LocalAICore(private val context: Context) {
 
@@ -19,7 +20,7 @@ class LocalAICore(private val context: Context) {
 
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
-        return if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) { // Lowered size check for smaller Qwen model
+        return if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
             "> NEURAL CORE LOCATED.\n> Status: Ready for Inference."
         } else {
             "> [!] NEURAL CORE OFFLINE."
@@ -30,7 +31,6 @@ class LocalAICore(private val context: Context) {
         val privateFile = File(context.filesDir, "brain.gguf")
         try {
             if (privateFile.exists()) privateFile.delete()
-            
             val outputStream = FileOutputStream(privateFile)
             val buffer = ByteArray(8192)
             var bytesRead: Int
@@ -50,8 +50,24 @@ class LocalAICore(private val context: Context) {
     }
 
     fun generateResponse(prompt: String): String {
-        if (prompt.lowercase() == "ping cpp") return stringFromJNI()
+        val lowerPrompt = prompt.lowercase()
         
+        // --- THE TRAFFIC COP (NATIVE INTERCEPTORS) ---
+        if (lowerPrompt == "ping cpp") return stringFromJNI()
+        
+        if (lowerPrompt.startsWith("macro.launch ")) {
+            val target = prompt.substring(13).trim()
+            return DevilkingService.instance?.executeAction("LAUNCH", target) 
+                ?: "> [!] ERROR: Ghost Service Offline. Check Accessibility Settings."
+        }
+
+        if (lowerPrompt.startsWith("macro.click ")) {
+            val target = prompt.substring(12).trim()
+            return DevilkingService.instance?.executeAction("CLICK", target) 
+                ?: "> [!] ERROR: Ghost Service Offline. Check Accessibility Settings."
+        }
+
+        // --- THE AI BRAIN (FALLBACK) ---
         if (!isModelLoaded) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
@@ -61,13 +77,9 @@ class LocalAICore(private val context: Context) {
             } else return "> [!] CORE NOT INJECTED."
         }
 
-        // QWEN CHATML FORMAT
         val systemPrompt = "You are DEVILKING OS, a cold system terminal."
         val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-        
         val rawAnswer = generateResponseFromJNI(formattedPrompt)
-        
-        // Clean up any trailing ChatML tags from Qwen's output
         val cleanAnswer = rawAnswer.replace("<|im_end|>", "").trim()
         
         return "> [DEVILKING AI]: $cleanAnswer"

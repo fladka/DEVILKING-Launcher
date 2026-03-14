@@ -1,6 +1,7 @@
 package com.devilking.os.automation
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
@@ -8,7 +9,7 @@ import android.util.Log
 class DevilkingService : AccessibilityService() {
 
     companion object {
-        // This allows our Terminal to talk directly to this background service
+        // The Master Instance allows our Terminal to talk directly to this background service
         var instance: DevilkingService? = null
             private set
     }
@@ -20,16 +21,51 @@ class DevilkingService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // This is where our "Record Mode" will eventually live.
-        // For now, it silently watches without doing anything so it doesn't drain battery.
+        // Passive listening disabled for absolute stability
     }
 
-    override fun onInterrupt() {
-        Log.e("DEVILKING_SYS", "Accessibility Core Interrupted!")
-    }
+    override fun onInterrupt() {}
 
     override fun onDestroy() {
         super.onDestroy()
         instance = null
+    }
+
+    // --- THE MACRO EXECUTION ENGINE ---
+    fun executeAction(command: String, target: String): String {
+        return try {
+            when (command.uppercase()) {
+                "LAUNCH" -> {
+                    val launchIntent = packageManager.getLaunchIntentForPackage(target)
+                    if (launchIntent != null) {
+                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(launchIntent)
+                        "> [GHOST]: Launched target ($target)"
+                    } else {
+                        "> [!] ERROR: Target package not found."
+                    }
+                }
+                "CLICK" -> {
+                    val rootNode = rootInActiveWindow
+                    if (rootNode != null) {
+                        // Scan the invisible UI tree for any node matching the target text
+                        val nodes = rootNode.findAccessibilityNodeInfosByText(target)
+                        if (nodes.isNotEmpty()) {
+                            val targetNode = nodes[0]
+                            targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            targetNode.recycle()
+                            "> [GHOST]: Clicked node ($target)"
+                        } else {
+                            "> [!] ERROR: Node ($target) not found on screen."
+                        }
+                    } else {
+                        "> [!] ERROR: Cannot read screen. UI tree is null."
+                    }
+                }
+                else -> "> [!] ERROR: Unknown Macro Command."
+            }
+        } catch (e: Exception) {
+            "> [!] GHOST FATAL: ${e.message}"
+        }
     }
 }
