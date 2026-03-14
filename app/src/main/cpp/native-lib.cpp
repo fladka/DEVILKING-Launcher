@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <thread>
 #include "llama.h"
 
 struct llama_model * model = nullptr;
@@ -35,21 +36,27 @@ Java_com_devilking_os_ai_LocalAICore_loadModelFromJNI(JNIEnv* env, jobject, jstr
     return env->NewStringUTF("> [DEVILKING AI]: Neural Core successfully injected into physical RAM! System is stabilized.");
 }
 
-// THE FINAL BOSS: The Generation Loop
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobject, jstring prompt) {
-    if (model == nullptr) return env->NewStringUTF("ERROR: Model not loaded in RAM. Type 'inject core' first.");
+    if (model == nullptr) return env->NewStringUTF("ERROR: Model not loaded in RAM.");
 
     const char * prompt_c = env->GetStringUTFChars(prompt, nullptr);
     std::string result_text = "";
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 1024;
+    
+    // --- THE SPEED HACK ---
+    // Force the engine to use 4 CPU threads (utilizing your Snapdragon's multi-core architecture)
+    ctx_params.n_threads = 4; 
+    ctx_params.n_threads_batch = 4;
+    // ----------------------
+
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
     
     if (ctx == nullptr) {
         env->ReleaseStringUTFChars(prompt, prompt_c);
-        return env->NewStringUTF("ERROR: Failed to allocate CPU memory context.");
+        return env->NewStringUTF("ERROR: Context allocation failure.");
     }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
@@ -67,11 +74,8 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     llama_decode(ctx, batch);
 
-    // Generate 25 words
-    for (int i = 0; i < 25; i++) {
+    for (int i = 0; i < 150; i++) {
         
-        // --- THE BULLETPROOF FIX ---
-        // Bypassing the broken Sampler API completely using raw manual greedy search
         float * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
         int n_vocab = llama_vocab_n_tokens(vocab);
         
@@ -83,9 +87,7 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
                 new_token_id = j;
             }
         }
-        // ---------------------------
         
-        // Stop if the AI finishes its sentence
         if (new_token_id == llama_vocab_eos(vocab)) {
             break;
         }
