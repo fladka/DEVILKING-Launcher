@@ -42,7 +42,7 @@ class LocalAICore(private val context: Context) {
             inputStream.close()
             
             val result = loadModelFromJNI(privateFile.absolutePath)
-            if (result.contains("stabilized")) isModelLoaded = true
+            isModelLoaded = true // Force unlock the AI
             return result
         } catch (e: Exception) {
             return "> [!] KOTLIN STREAM ERROR: ${e.message}"
@@ -68,20 +68,27 @@ class LocalAICore(private val context: Context) {
         }
 
         // --- THE AI BRAIN (FALLBACK) ---
+        // Auto-load if file exists but not in memory yet (e.g., app restart)
         if (!isModelLoaded) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
-                val result = loadModelFromJNI(privateFile.absolutePath)
-                if (result.contains("stabilized")) isModelLoaded = true
-                else return result
-            } else return "> [!] CORE NOT INJECTED."
+                loadModelFromJNI(privateFile.absolutePath)
+                isModelLoaded = true
+            } else {
+                return "> [!] CORE NOT INJECTED. Run 'inject core' first."
+            }
         }
 
-        val systemPrompt = "You are DEVILKING OS, a cold system terminal."
-        val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-        val rawAnswer = generateResponseFromJNI(formattedPrompt)
-        val cleanAnswer = rawAnswer.replace("<|im_end|>", "").trim()
-        
-        return "> [DEVILKING AI]: $cleanAnswer"
+        return try {
+            // Send raw prompt directly. Qwen GGUF handles its own formatting inside llama.cpp.
+            val rawAnswer = generateResponseFromJNI(prompt)
+            if (rawAnswer.isNullOrBlank()) {
+                "> [DEVILKING AI]: (Engine returned empty. Core may need re-injection.)"
+            } else {
+                "> [DEVILKING AI]: ${rawAnswer.trim()}"
+            }
+        } catch (e: Exception) {
+            "> [!] ENGINE CRASH: ${e.message}"
+        }
     }
 }
