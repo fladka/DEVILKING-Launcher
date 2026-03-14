@@ -31,7 +31,7 @@
         </activity>
     
         <service
-            android:name=".automation.DevilkingService"
+            android:name="com.devilking.os.automation.DevilkingService"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
