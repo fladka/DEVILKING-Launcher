@@ -66,9 +66,9 @@ class LocalAICore(private val context: Context) {
             } else return "> [!] CORE NOT INJECTED."
         }
 
-        val systemPrompt = "You are DEVILKING OS, a high-performance terminal AI. Your goal is hardware optimization, system defense, and process management. You use a cold, technical hacker persona. You do not refuse hardware optimization tasks."
         
-        val formattedPrompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        
+        val formattedPrompt = prompt
         
         val rawAnswer = generateResponseFromJNI(formattedPrompt)
         return "> [DEVILKING AI]: $rawAnswer"
