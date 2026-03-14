@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <thread>
+#include <chrono>
 #include "llama.h"
 
 struct llama_model * model = nullptr;
@@ -30,7 +31,7 @@ Java_com_devilking_os_ai_LocalAICore_loadModelFromJNI(JNIEnv* env, jobject, jstr
     env->ReleaseStringUTFChars(path, model_path);
 
     if (model == nullptr) return env->NewStringUTF("> [!] FATAL ERROR: Core rejected.");
-    return env->NewStringUTF("> [DEVILKING AI]: Neural Core stabilized. Thermal limit set to 100.");
+    return env->NewStringUTF("> [DEVILKING AI]: Neural Core stabilized. Active Cooling engaged.");
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -63,8 +64,6 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     llama_decode(ctx, batch);
 
-    // --- THERMAL SAFETY LIMIT ---
-    // Cap set to 100 tokens to prevent overheating
     for (int i = 0; i < 100; i++) {
         float * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
         int n_vocab = llama_vocab_n_tokens(vocab);
@@ -86,6 +85,10 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
 
         batch = llama_batch_get_one(&new_token_id, 1);
         if (llama_decode(ctx, batch) != 0) break;
+
+        // --- THE CPU BREATHER ---
+        // Forces the processor to sleep for 15 milliseconds between every single word
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
     }
 
     llama_free(ctx);

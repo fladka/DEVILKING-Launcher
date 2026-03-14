@@ -55,8 +55,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // FIX 2: EXPLICITLY ALLOW SCREENSHOTS
-        // This removes the "Secure" flag if it was accidentally set by the system
+        // Initial screenshot unblocker
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         setContentView(R.layout.activity_main)
@@ -70,7 +69,6 @@ class MainActivity : AppCompatActivity() {
         aiCore = LocalAICore(this) 
         aiContext = AIContext()
 
-        // Restore chat if rotation happens
         if (savedInstanceState != null) {
             tvTerminalOutput.text = savedInstanceState.getString("terminal_text")
         }
@@ -78,7 +76,13 @@ class MainActivity : AppCompatActivity() {
         setupInputListener()
     }
 
-    // Save text before rotation just in case
+    // FIX 1: AGGRESSIVE SCREENSHOT OVERRIDE
+    // Funtouch OS tries to re-lock the screen when you switch apps. This breaks the lock every time you return.
+    override fun onResume() {
+        super.onResume()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("terminal_text", tvTerminalOutput.text.toString())
@@ -99,9 +103,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // FIX 2: THE MATH INTERCEPTOR
+    private fun evaluateMath(input: String): String? {
+        try {
+            // Clean up spaces, equals signs, and question marks
+            val clean = input.replace("\\s".toRegex(), "").replace("=", "").replace("?", "")
+            // Regex to catch basic math: Number Operator Number
+            val regex = Regex("^(-?\\d+\\.?\\d*)([+\\-*/])(-?\\d+\\.?\\d*)$")
+            val match = regex.find(clean)
+            
+            if (match != null) {
+                val (num1Str, op, num2Str) = match.destructured
+                val num1 = num1Str.toDouble()
+                val num2 = num2Str.toDouble()
+                val result = when (op) {
+                    "+" -> num1 + num2
+                    "-" -> num1 - num2
+                    "*" -> num1 * num2
+                    "/" -> if (num2 != 0.0) num1 / num2 else return "> [!] MATH ERROR: Division by zero."
+                    else -> return null
+                }
+                // Format nicely (remove .0 if it's a whole number)
+                val resultStr = if (result % 1.0 == 0.0) result.toLong().toString() else result.toString()
+                return "> [SYSTEM CALC]: $clean = $resultStr"
+            }
+        } catch (e: Exception) { return null }
+        return null
+    }
+
     private fun processCommand(input: String) {
         printToTerminal("root@devilking:~# $input")
         etCommandInput.text.clear()
+
+        // Check if it's just a math problem before waking up the AI
+        val mathResult = evaluateMath(input)
+        if (mathResult != null) {
+            printToTerminal(mathResult)
+            etCommandInput.isEnabled = true
+            return
+        }
 
         val parts = input.split(Regex("\\s+"), 2)
         val command = parts[0].lowercase()
