@@ -25,3 +25,5 @@ target_link_libraries(
         devilking_engine
         ${log-lib}
         llama)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Ofast -ffast-math")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -Ofast -ffast-math")
