@@ -4,7 +4,6 @@ import android.content.Context
 import java.io.File
 import java.io.InputStream
 import java.io.FileOutputStream
-import com.devilking.os.automation.DevilkingService
 
 class LocalAICore(private val context: Context) {
 
@@ -17,6 +16,7 @@ class LocalAICore(private val context: Context) {
     private external fun generateResponseFromJNI(prompt: String): String 
 
     private var isModelLoaded = false
+    private val regexRouter = RegexRouter(context) // Initialize the Gatekeeper
 
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
@@ -50,22 +50,14 @@ class LocalAICore(private val context: Context) {
     }
 
     fun generateResponse(prompt: String): String {
-        val lowerPrompt = prompt.lowercase()
         
-        // --- THE TRAFFIC COP ---
-        if (lowerPrompt == "ping cpp") return stringFromJNI()
-        if (lowerPrompt.startsWith("macro.launch ")) {
-            val target = prompt.substring(13).trim()
-            return DevilkingService.instance?.executeAction("LAUNCH", target) 
-                ?: "> [!] ERROR: Ghost Service Offline. Check Accessibility Settings."
-        }
-        if (lowerPrompt.startsWith("macro.click ")) {
-            val target = prompt.substring(12).trim()
-            return DevilkingService.instance?.executeAction("CLICK", target) 
-                ?: "> [!] ERROR: Ghost Service Offline. Check Accessibility Settings."
+        // --- 1. THE REFLEX ARC (Zero Latency) ---
+        val reflexAnswer = regexRouter.route(prompt)
+        if (reflexAnswer != null) {
+            return reflexAnswer // Bypasses the AI completely!
         }
 
-        // --- THE AI BRAIN ---
+        // --- 2. THE NEURAL BRAIN (Heavy Compute) ---
         if (!isModelLoaded) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
@@ -77,20 +69,13 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            // STRICT CHATML FORMATTING & SYSTEM PERSONA
             val systemPrompt = "You are DEVILKING OS, a cold, secure, and highly efficient hacker terminal. Keep all answers brutally short, direct, and under 2 sentences unless specifically asked to explain."
             val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
             
             val rawAnswer = generateResponseFromJNI(formattedPrompt)
-            
-            // Clean the output and force a stop token cut
             val cleanAnswer = rawAnswer.substringAfter("assistant\n").substringBefore("<|im_end|>").trim()
             
-            if (cleanAnswer.isBlank()) {
-                 "> [DEVILKING AI]: (Signal Lost)"
-            } else {
-                 "> [DEVILKING AI]: $cleanAnswer"
-            }
+            if (cleanAnswer.isBlank()) "> [DEVILKING AI]: (Signal Lost)" else "> [DEVILKING AI]: $cleanAnswer"
         } catch (e: Exception) {
             "> [!] ENGINE CRASH: ${e.message}"
         }
