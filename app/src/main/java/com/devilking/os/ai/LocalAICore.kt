@@ -16,7 +16,8 @@ class LocalAICore(private val context: Context) {
     private external fun generateResponseFromJNI(prompt: String): String 
 
     private var isModelLoaded = false
-    private val regexRouter = RegexRouter(context) // Initialize the Gatekeeper
+    private val regexRouter = RegexRouter(context)
+    private val vaultManager = VaultManager() // Boot up the Vault
 
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
@@ -43,7 +44,7 @@ class LocalAICore(private val context: Context) {
             
             loadModelFromJNI(privateFile.absolutePath)
             isModelLoaded = true
-            return "> [DEVILKING AI]: Neural Core stabilized. Active Cooling engaged."
+            return "> [DEVILKING AI]: Neural Core stabilized. " + vaultManager.loadVault()
         } catch (e: Exception) {
             return "> [!] KOTLIN STREAM ERROR: ${e.message}"
         }
@@ -51,13 +52,15 @@ class LocalAICore(private val context: Context) {
 
     fun generateResponse(prompt: String): String {
         
-        // --- 1. THE REFLEX ARC (Zero Latency) ---
-        val reflexAnswer = regexRouter.route(prompt)
-        if (reflexAnswer != null) {
-            return reflexAnswer // Bypasses the AI completely!
+        // --- 1. COMMAND REFLEXES ---
+        if (prompt.lowercase() == "vault.reload") {
+            return vaultManager.loadVault()
         }
 
-        // --- 2. THE NEURAL BRAIN (Heavy Compute) ---
+        val reflexAnswer = regexRouter.route(prompt)
+        if (reflexAnswer != null) return reflexAnswer
+
+        // --- 2. THE NEURAL BRAIN ---
         if (!isModelLoaded) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
@@ -69,7 +72,10 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            val systemPrompt = "You are DEVILKING OS, a cold, secure, and highly efficient hacker terminal. Keep all answers brutally short, direct, and under 2 sentences unless specifically asked to explain."
+            // We inject the Vault context directly into the System Persona
+            val vaultData = vaultManager.injectContext()
+            val systemPrompt = "You are DEVILKING OS, a cold, secure hacker terminal. Keep answers brutally short, under 2 sentences. Use the following local data to answer if relevant: $vaultData"
+            
             val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
             
             val rawAnswer = generateResponseFromJNI(formattedPrompt)
