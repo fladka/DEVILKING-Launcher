@@ -41,9 +41,9 @@ class LocalAICore(private val context: Context) {
             outputStream.close()
             inputStream.close()
             
-            val result = loadModelFromJNI(privateFile.absolutePath)
-            isModelLoaded = true // Force unlock the AI
-            return result
+            loadModelFromJNI(privateFile.absolutePath)
+            isModelLoaded = true
+            return "> [DEVILKING AI]: Neural Core stabilized. Active Cooling engaged."
         } catch (e: Exception) {
             return "> [!] KOTLIN STREAM ERROR: ${e.message}"
         }
@@ -52,23 +52,20 @@ class LocalAICore(private val context: Context) {
     fun generateResponse(prompt: String): String {
         val lowerPrompt = prompt.lowercase()
         
-        // --- THE TRAFFIC COP (NATIVE INTERCEPTORS) ---
+        // --- THE TRAFFIC COP ---
         if (lowerPrompt == "ping cpp") return stringFromJNI()
-        
         if (lowerPrompt.startsWith("macro.launch ")) {
             val target = prompt.substring(13).trim()
             return DevilkingService.instance?.executeAction("LAUNCH", target) 
                 ?: "> [!] ERROR: Ghost Service Offline. Check Accessibility Settings."
         }
-
         if (lowerPrompt.startsWith("macro.click ")) {
             val target = prompt.substring(12).trim()
             return DevilkingService.instance?.executeAction("CLICK", target) 
                 ?: "> [!] ERROR: Ghost Service Offline. Check Accessibility Settings."
         }
 
-        // --- THE AI BRAIN (FALLBACK) ---
-        // Auto-load if file exists but not in memory yet (e.g., app restart)
+        // --- THE AI BRAIN ---
         if (!isModelLoaded) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
@@ -80,12 +77,19 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            // Send raw prompt directly. Qwen GGUF handles its own formatting inside llama.cpp.
-            val rawAnswer = generateResponseFromJNI(prompt)
-            if (rawAnswer.isNullOrBlank()) {
-                "> [DEVILKING AI]: (Engine returned empty. Core may need re-injection.)"
+            // STRICT CHATML FORMATTING & SYSTEM PERSONA
+            val systemPrompt = "You are DEVILKING OS, a cold, secure, and highly efficient hacker terminal. Keep all answers brutally short, direct, and under 2 sentences unless specifically asked to explain."
+            val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+            
+            val rawAnswer = generateResponseFromJNI(formattedPrompt)
+            
+            // Clean the output and force a stop token cut
+            val cleanAnswer = rawAnswer.substringAfter("assistant\n").substringBefore("<|im_end|>").trim()
+            
+            if (cleanAnswer.isBlank()) {
+                 "> [DEVILKING AI]: (Signal Lost)"
             } else {
-                "> [DEVILKING AI]: ${rawAnswer.trim()}"
+                 "> [DEVILKING AI]: $cleanAnswer"
             }
         } catch (e: Exception) {
             "> [!] ENGINE CRASH: ${e.message}"
