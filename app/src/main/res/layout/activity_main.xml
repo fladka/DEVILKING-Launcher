@@ -49,7 +49,7 @@
             android:textColor="#00FF00"
             android:textSize="14sp"
             android:fontFamily="monospace"
-            android:inputType="textNoSuggestions|textVisiblePassword"
+            android:inputType="textNoSuggestions|textNoSuggestions"
             android:imeOptions="actionDone"
             android:maxLines="1" />
     </LinearLayout>
