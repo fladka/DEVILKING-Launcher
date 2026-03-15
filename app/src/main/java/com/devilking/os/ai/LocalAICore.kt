@@ -1,6 +1,9 @@
 package com.devilking.os.ai
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import java.io.File
 import java.io.InputStream
 import java.io.FileOutputStream
@@ -17,7 +20,7 @@ class LocalAICore(private val context: Context) {
 
     private var isModelLoaded = false
     private val regexRouter = RegexRouter(context)
-    private val vaultManager = VaultManager() // Boot up the Vault
+    private val vaultManager = VaultManager()
 
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
@@ -51,10 +54,28 @@ class LocalAICore(private val context: Context) {
     }
 
     fun generateResponse(prompt: String): String {
+        val lowerPrompt = prompt.lowercase()
         
-        // --- 1. COMMAND REFLEXES ---
-        if (prompt.lowercase() == "vault.reload") {
+        // --- 1. SYSTEM COMMANDS ---
+        if (lowerPrompt == "vault.reload") {
             return vaultManager.loadVault()
+        }
+        
+        // THE SECURITY OVERRIDE INTENT
+        if (lowerPrompt == "vault.unlock") {
+            return try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:${context.packageName}")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                "> [SYSTEM]: Security Override Launched. Please grant 'All Files Access' on the screen."
+            } catch (e: Exception) {
+                // Fallback for older OS versions
+                val fallbackIntent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(fallbackIntent)
+                "> [SYSTEM]: Security Override Launched. Please find DEVILKING and grant access."
+            }
         }
 
         val reflexAnswer = regexRouter.route(prompt)
@@ -72,9 +93,8 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            // We inject the Vault context directly into the System Persona
             val vaultData = vaultManager.injectContext()
-            val systemPrompt = "You are DEVILKING OS, a cold, secure hacker terminal. Keep answers brutally short, under 2 sentences. Use the following local data to answer if relevant: $vaultData"
+            val systemPrompt = "You are DEVILKING OS, a cold, secure hacker terminal. Keep answers brutally short, under 2 sentences. Use the following local data to answer if relevant:\n$vaultData"
             
             val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
             
