@@ -82,6 +82,22 @@ class RegexRouter(private val context: Context) {
             }
         }
 
+        // 7. THE SMART UI SNIPER TRIGGER
+        if (input.startsWith("snipe ")) {
+            val target = input.removePrefix("snipe ").trim()
+            val service = com.devilking.os.system.DevilkingAccessibilityService.instance
+            if (service != null) {
+                val success = service.executeSniperStrike(target)
+                return if (success) {
+                    "> [SYSTEM]: Target '$target' acquired and eliminated (Clicked)."
+                } else {
+                    "> [!] SNIPER ERROR: Target '$target' not found on current screen view."
+                }
+            } else {
+                return "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
+            }
+        }
+
         return null 
     }
 
