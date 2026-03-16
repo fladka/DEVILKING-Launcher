@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } catch (e: Exception) {
-                    runOnUiThread { printToTerminal("> [!] ERROR: \${e.message}") }
+                    runOnUiThread { printToTerminal("> [!] ERROR: ${e.message}") }
                 }
             }
         } else {
@@ -86,8 +86,6 @@ class MainActivity : AppCompatActivity() {
                 
                 val rawInput = etCommandInput.text.toString().trim()
                 if (rawInput.isNotEmpty()) {
-                    // THE FIX: We removed the 'isEnabled = false' lock. 
-                    // You can now type infinitely while the AI thinks.
                     processCommand(rawInput)
                 }
                 true
@@ -113,14 +111,15 @@ class MainActivity : AppCompatActivity() {
                     else -> return null
                 }
                 val resultStr = if (result % 1.0 == 0.0) result.toLong().toString() else result.toString()
-                return "> [SYSTEM CALC]: \$clean = \$resultStr"
+                return "> [SYSTEM CALC]: $clean = $resultStr"
             }
         } catch (e: Exception) { return null }
         return null
     }
 
     private fun processCommand(input: String) {
-        printToTerminal("root@devilking:~# \$input")
+        // THE FIX: Removed the backslash so it prints your actual command
+        printToTerminal("root@devilking:~# $input")
         etCommandInput.text.clear()
 
         val mathResult = evaluateMath(input)
@@ -154,7 +153,6 @@ class MainActivity : AppCompatActivity() {
     private fun processAICommand(input: String) {
         printToTerminal("> [DEVILKING AI]: Processing intent...")
         
-        // THE SMART TIMER: Tracks how long the AI takes to think
         val startTime = System.currentTimeMillis()
         
         thread {
@@ -164,13 +162,10 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 printToTerminal(response)
                 
-                // THE NOTIFICATION: If it took longer than 1.5 seconds, pop a Toast alert.
-                // This prevents your screen from getting spammed during 0-second Matrix commands.
                 if (timeTaken > 1500) {
                     Toast.makeText(this@MainActivity, "DEVILKING AI: Thought Complete", Toast.LENGTH_SHORT).show()
                 }
                 
-                // Keep the cursor ready for the next command
                 etCommandInput.requestFocus()
             }
         }
