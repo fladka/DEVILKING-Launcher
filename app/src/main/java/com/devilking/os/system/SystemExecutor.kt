@@ -12,6 +12,8 @@ class SystemExecutor(private val context: Context) {
     private var cameraId: String? = null
 
     private val aegisBlacklist = listOf("com.android", "com.vivo", "android")
+    // THE FIX: VIP Pass for safe system apps
+    private val aegisWhitelist = listOf("com.android.chrome", "com.android.vending")
 
     init {
         try {
@@ -42,7 +44,7 @@ class SystemExecutor(private val context: Context) {
                 "> [!] ERROR: Camera hardware not responding."
             }
         } catch (e: Exception) {
-            "> [!] ERROR: Flashlight override failed. Vivo may have locked the hardware."
+            "> [!] ERROR: Flashlight override failed."
         }
     }
 
@@ -55,19 +57,25 @@ class SystemExecutor(private val context: Context) {
             
             if (name.contains(appName)) {
                 val packageName = packageInfo.packageName
-                
-                if (aegisBlacklist.any { packageName.startsWith(it) }) {
-                    return "> [!] AEGIS FIREWALL: Access to system package '$packageName' is strictly forbidden."
-                }
-                
                 val launchIntent = pm.getLaunchIntentForPackage(packageName)
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(launchIntent)
-                    return "> [SYSTEM]: Launching $name..."
+                
+                // If the app doesn't have a launcher UI, it's a hidden background process. Skip it.
+                if (launchIntent == null) continue
+                
+                // AEGIS FIREWALL CHECK
+                val isBlacklisted = aegisBlacklist.any { packageName.startsWith(it) }
+                val isWhitelisted = aegisWhitelist.contains(packageName)
+                
+                if (isBlacklisted && !isWhitelisted) {
+                    // THE FIX: Skip this protected app and keep searching instead of crashing!
+                    continue 
                 }
+                
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launchIntent)
+                return "> [SYSTEM]: Launching $name..."
             }
         }
-        return "> [!] ERROR: Application '$appName' not found in registry."
+        return "> [!] ERROR: Application '$appName' not found or is restricted by Aegis."
     }
 }
