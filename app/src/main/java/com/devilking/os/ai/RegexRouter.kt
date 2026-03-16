@@ -13,7 +13,6 @@ class RegexRouter(private val context: Context) {
     fun route(prompt: String): String? {
         val input = prompt.lowercase().trim()
 
-        // 1. Matrix Initialization
         if (input == "matrix.init") {
             val defaultJson = """[
               {
@@ -31,7 +30,6 @@ class RegexRouter(private val context: Context) {
             return "> [SYSTEM]: memory.json constructed in local storage. Neural pathways locked."
         }
 
-        // 2. Matrix Export (Moves brain to Vault for editing)
         if (input == "matrix.export") {
             return try {
                 val internalFile = File(context.filesDir, "memory.json")
@@ -45,7 +43,6 @@ class RegexRouter(private val context: Context) {
             }
         }
 
-        // 3. Matrix Import (Pulls edited brain from Vault)
         if (input == "matrix.import") {
             return try {
                 val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
@@ -59,7 +56,6 @@ class RegexRouter(private val context: Context) {
             }
         }
 
-        // 4. The JSON Memory Matrix
         val memoryResult = checkMemoryMatrix(input)
         if (memoryResult != null) {
             return if (memoryResult.contains("[EXECUTE:")) {
@@ -69,11 +65,21 @@ class RegexRouter(private val context: Context) {
             }
         }
 
-        // 5. Hardcoded Fallbacks
         if (input == "flashlight" || input == "lumos") return executor.executeCommand("[EXECUTE: FLASHLIGHT_TOGGLE]")
         if (input.startsWith("open ")) {
             val appName = input.removePrefix("open ").trim()
             return executor.executeCommand("[EXECUTE: LAUNCH_APP_$appName]")
+        }
+
+        // 6. THE PHANTOM FINGER TRIGGER
+        if (input == "scroll") {
+            val service = com.devilking.os.system.DevilkingAccessibilityService.instance
+            if (service != null) {
+                service.performSwipeUp()
+                return "> [SYSTEM]: Phantom Finger executed. Swiping screen."
+            } else {
+                return "> [!] GOD MODE OFFLINE: You must enable DEVILKING OS in Android Accessibility Settings."
+            }
         }
 
         return null 
