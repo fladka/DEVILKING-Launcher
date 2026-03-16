@@ -1,7 +1,6 @@
 package com.devilking.os.ai
 
 import android.content.Context
-import android.content.Intent
 import java.io.File
 import java.io.InputStream
 import java.io.FileOutputStream
@@ -16,7 +15,9 @@ class LocalAICore(private val context: Context) {
 
     private var isModelLoaded = false
     private val regexRouter = RegexRouter(context)
-    private val vaultManager = VaultManager(context)
+    
+    // FIX 1: Removed 'context' parameter to match your exact codebase
+    private val vaultManager = VaultManager()
 
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
@@ -43,13 +44,6 @@ class LocalAICore(private val context: Context) {
         val lowerPrompt = prompt.lowercase()
         
         if (lowerPrompt == "vault.reload") return vaultManager.loadVault()
-        
-        if (lowerPrompt == "vault.add") {
-            val intent = Intent(context, VaultPickerActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-            return "> [SYSTEM]: Opening Secure Importer..."
-        }
 
         val reflexAnswer = regexRouter.route(prompt)
         if (reflexAnswer != null) return reflexAnswer
