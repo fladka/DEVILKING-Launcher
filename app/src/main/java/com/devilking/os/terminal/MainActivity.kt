@@ -8,6 +8,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.devilking.os.execution.CommandExecutor
@@ -35,29 +36,21 @@ class MainActivity : AppCompatActivity() {
                         val response = aiCore.injectFromStream(inputStream)
                         runOnUiThread {
                             printToTerminal(response)
-                            etCommandInput.isEnabled = true
                             etCommandInput.requestFocus()
                         }
                     }
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        printToTerminal("> [!] ERROR: ${e.message}")
-                        etCommandInput.isEnabled = true
-                    }
+                    runOnUiThread { printToTerminal("> [!] ERROR: \${e.message}") }
                 }
             }
         } else {
             printToTerminal("> [!] ACTION ABORTED: No file selected.")
-            etCommandInput.isEnabled = true
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Initial screenshot unblocker
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-
         setContentView(R.layout.activity_main)
         supportActionBar?.hide()
 
@@ -76,8 +69,6 @@ class MainActivity : AppCompatActivity() {
         setupInputListener()
     }
 
-    // FIX 1: AGGRESSIVE SCREENSHOT OVERRIDE
-    // Funtouch OS tries to re-lock the screen when you switch apps. This breaks the lock every time you return.
     override fun onResume() {
         super.onResume()
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -95,7 +86,8 @@ class MainActivity : AppCompatActivity() {
                 
                 val rawInput = etCommandInput.text.toString().trim()
                 if (rawInput.isNotEmpty()) {
-                    etCommandInput.isEnabled = false 
+                    // THE FIX: We removed the 'isEnabled = false' lock. 
+                    // You can now type infinitely while the AI thinks.
                     processCommand(rawInput)
                 }
                 true
@@ -103,12 +95,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // FIX 2: THE MATH INTERCEPTOR
     private fun evaluateMath(input: String): String? {
         try {
-            // Clean up spaces, equals signs, and question marks
             val clean = input.replace("\\s".toRegex(), "").replace("=", "").replace("?", "")
-            // Regex to catch basic math: Number Operator Number
             val regex = Regex("^(-?\\d+\\.?\\d*)([+\\-*/])(-?\\d+\\.?\\d*)$")
             val match = regex.find(clean)
             
@@ -123,23 +112,20 @@ class MainActivity : AppCompatActivity() {
                     "/" -> if (num2 != 0.0) num1 / num2 else return "> [!] MATH ERROR: Division by zero."
                     else -> return null
                 }
-                // Format nicely (remove .0 if it's a whole number)
                 val resultStr = if (result % 1.0 == 0.0) result.toLong().toString() else result.toString()
-                return "> [SYSTEM CALC]: $clean = $resultStr"
+                return "> [SYSTEM CALC]: \$clean = \$resultStr"
             }
         } catch (e: Exception) { return null }
         return null
     }
 
     private fun processCommand(input: String) {
-        printToTerminal("root@devilking:~# $input")
+        printToTerminal("root@devilking:~# \$input")
         etCommandInput.text.clear()
 
-        // Check if it's just a math problem before waking up the AI
         val mathResult = evaluateMath(input)
         if (mathResult != null) {
             printToTerminal(mathResult)
-            etCommandInput.isEnabled = true
             return
         }
 
@@ -151,28 +137,15 @@ class MainActivity : AppCompatActivity() {
             "open" -> {
                 if (target.isNotEmpty()) printToTerminal(commandExecutor.launchApp(target))
                 else printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
-                etCommandInput.isEnabled = true
             }
-            "help" -> {
-                printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - inject core (Load AI)\n  - clear (Wipe screen)")
-                etCommandInput.isEnabled = true
-            }
-            "clear" -> {
-                tvTerminalOutput.text = ""
-                etCommandInput.isEnabled = true
-            }
-            "core" -> {
-                printToTerminal(aiCore.checkCoreStatus())
-                etCommandInput.isEnabled = true
-            }
+            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - inject core (Load AI)\n  - clear (Wipe screen)")
+            "clear" -> tvTerminalOutput.text = ""
+            "core" -> printToTerminal(aiCore.checkCoreStatus())
             "inject" -> {
                 if (target == "core") {
                     printToTerminal("> [DEVILKING AI]: Requesting secure file selection...")
                     filePickerLauncher.launch(arrayOf("*/*")) 
-                } else {
-                    printToTerminal("> [!] SYNTAX ERROR: Did you mean 'inject core'?")
-                    etCommandInput.isEnabled = true
-                }
+                } else printToTerminal("> [!] SYNTAX ERROR: Did you mean 'inject core'?")
             }
             else -> processAICommand(input)
         }
@@ -180,11 +153,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun processAICommand(input: String) {
         printToTerminal("> [DEVILKING AI]: Processing intent...")
+        
+        // THE SMART TIMER: Tracks how long the AI takes to think
+        val startTime = System.currentTimeMillis()
+        
         thread {
             val response = aiCore.generateResponse(input) 
+            val timeTaken = System.currentTimeMillis() - startTime
+            
             runOnUiThread {
                 printToTerminal(response)
-                etCommandInput.isEnabled = true 
+                
+                // THE NOTIFICATION: If it took longer than 1.5 seconds, pop a Toast alert.
+                // This prevents your screen from getting spammed during 0-second Matrix commands.
+                if (timeTaken > 1500) {
+                    Toast.makeText(this@MainActivity, "DEVILKING AI: Thought Complete", Toast.LENGTH_SHORT).show()
+                }
+                
+                // Keep the cursor ready for the next command
                 etCommandInput.requestFocus()
             }
         }
