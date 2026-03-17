@@ -12,7 +12,6 @@ class SystemExecutor(private val context: Context) {
     private var cameraId: String? = null
 
     private val aegisBlacklist = listOf("com.android", "com.vivo", "android")
-    // THE FIX: VIP Pass for safe system apps
     private val aegisWhitelist = listOf("com.android.chrome", "com.android.vending")
 
     init {
@@ -22,14 +21,41 @@ class SystemExecutor(private val context: Context) {
     }
 
     fun executeCommand(rawCommand: String): String {
-        val commandText = rawCommand.substringAfter("[EXECUTE:").substringBefore("]").trim()
+        // UPGRADED TO PARSE [CMD: ...]
+        val commandText = rawCommand.substringAfter("[CMD:").substringBefore("]").trim()
         
         return when {
-            commandText == "FLASHLIGHT_TOGGLE" -> toggleFlashlight()
-            commandText.startsWith("LAUNCH_APP_") -> {
-                val appName = commandText.removePrefix("LAUNCH_APP_").lowercase()
+            commandText == "flashlight" -> toggleFlashlight()
+            
+            commandText.startsWith("open ") -> {
+                val appName = commandText.removePrefix("open ").lowercase()
                 launchApp(appName)
             }
+            
+            commandText == "scroll" -> {
+                val service = com.devilking.os.system.DevilkingAccessibilityService.instance
+                if (service != null) {
+                    service.performSwipeUp()
+                    "> [SYSTEM]: Phantom Finger executed. Swiping screen."
+                } else {
+                    "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
+                }
+            }
+            
+            commandText.startsWith("snipe ") -> {
+                val target = commandText.removePrefix("snipe ").trim()
+                val service = com.devilking.os.system.DevilkingAccessibilityService.instance
+                if (service != null) {
+                    val success = service.executeSniperStrike(target)
+                    if (success) "> [SYSTEM]: Target '$target' acquired and eliminated."
+                    else "> [!] SNIPER ERROR: Target '$target' not found."
+                } else {
+                    "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
+                }
+            }
+            
+            commandText == "none" -> "> [DEVILKING AI]: Standing by."
+            
             else -> "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($commandText)."
         }
     }
@@ -39,7 +65,8 @@ class SystemExecutor(private val context: Context) {
             if (cameraId != null) {
                 isFlashlightOn = !isFlashlightOn
                 cameraManager.setTorchMode(cameraId!!, isFlashlightOn)
-                if (isFlashlightOn) "> [SYSTEM]: Flashlight Engaged." else "> [SYSTEM]: Flashlight Disabled."
+                if (isFlashlightOn) "> [SYSTEM]: Flashlight Engaged."
+                else "> [SYSTEM]: Flashlight Disabled."
             } else {
                 "> [!] ERROR: Camera hardware not responding."
             }
@@ -59,7 +86,6 @@ class SystemExecutor(private val context: Context) {
                 val packageName = packageInfo.packageName
                 val launchIntent = pm.getLaunchIntentForPackage(packageName)
                 
-                // If the app doesn't have a launcher UI, it's a hidden background process. Skip it.
                 if (launchIntent == null) continue
                 
                 // AEGIS FIREWALL CHECK
@@ -67,7 +93,6 @@ class SystemExecutor(private val context: Context) {
                 val isWhitelisted = aegisWhitelist.contains(packageName)
                 
                 if (isBlacklisted && !isWhitelisted) {
-                    // THE FIX: Skip this protected app and keep searching instead of crashing!
                     continue 
                 }
                 
