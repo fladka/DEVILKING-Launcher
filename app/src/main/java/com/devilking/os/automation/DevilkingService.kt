@@ -1,15 +1,17 @@
 package com.devilking.os.automation
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Path
+import android.os.Bundle
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.util.Log
 
 class DevilkingService : AccessibilityService() {
 
     companion object {
-        // The Master Instance allows our Terminal to talk directly to this background service
         var instance: DevilkingService? = null
             private set
     }
@@ -17,12 +19,10 @@ class DevilkingService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        Log.d("DEVILKING_SYS", "Accessibility Core Online. Ghost Fingers ready.")
+        Log.d("DEVILKING_SYS", "Accessibility Core Online. God Mode ready.")
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Passive listening disabled for absolute stability
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 
     override fun onInterrupt() {}
 
@@ -31,41 +31,65 @@ class DevilkingService : AccessibilityService() {
         instance = null
     }
 
-    // --- THE MACRO EXECUTION ENGINE ---
-    fun executeAction(command: String, target: String): String {
-        return try {
-            when (command.uppercase()) {
-                "LAUNCH" -> {
-                    val launchIntent = packageManager.getLaunchIntentForPackage(target)
-                    if (launchIntent != null) {
-                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(launchIntent)
-                        "> [GHOST]: Launched target ($target)"
-                    } else {
-                        "> [!] ERROR: Target package not found."
-                    }
-                }
-                "CLICK" -> {
-                    val rootNode = rootInActiveWindow
-                    if (rootNode != null) {
-                        // Scan the invisible UI tree for any node matching the target text
-                        val nodes = rootNode.findAccessibilityNodeInfosByText(target)
-                        if (nodes.isNotEmpty()) {
-                            val targetNode = nodes[0]
-                            targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                            targetNode.recycle()
-                            "> [GHOST]: Clicked node ($target)"
-                        } else {
-                            "> [!] ERROR: Node ($target) not found on screen."
-                        }
-                    } else {
-                        "> [!] ERROR: Cannot read screen. UI tree is null."
-                    }
-                }
-                else -> "> [!] ERROR: Unknown Macro Command."
+    // --- TIER 4: PHANTOM GESTURES ---
+    fun performSwipeUp() {
+        val path = Path()
+        path.moveTo(500f, 1500f)
+        path.lineTo(500f, 500f)
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 500))
+            .build()
+        dispatchGesture(gesture, null, null)
+    }
+
+    // --- TIER 2: TELEKINESIS (SNIPER) ---
+    fun executeSniperStrike(targetText: String): Boolean {
+        val rootNode = rootInActiveWindow ?: return false
+        val nodes = rootNode.findAccessibilityNodeInfosByText(targetText)
+        
+        if (nodes.isNotEmpty()) {
+            val targetNode = nodes[0]
+            var clickableNode: AccessibilityNodeInfo? = targetNode
+            
+            // Traverse up the UI tree to find the clickable parent
+            while (clickableNode != null && !clickableNode.isClickable) {
+                clickableNode = clickableNode.parent
             }
-        } catch (e: Exception) {
-            "> [!] GHOST FATAL: ${e.message}"
+            
+            if (clickableNode != null) {
+                clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                clickableNode.recycle()
+                targetNode.recycle()
+                rootNode.recycle()
+                return true
+            }
+            targetNode.recycle()
         }
+        rootNode.recycle()
+        return false
+    }
+
+    // --- TIER 2: TELEKINESIS (GHOST TYPING) ---
+    fun executeGhostType(targetField: String, textToInject: String): Boolean {
+        val rootNode = rootInActiveWindow ?: return false
+        val targetNodes = rootNode.findAccessibilityNodeInfosByText(targetField)
+        
+        for (node in targetNodes) {
+            // Verify node is an input field before injecting text
+            if (node.isEditable || node.className?.toString()?.contains("EditText") == true) {
+                val arguments = Bundle()
+                arguments.putCharSequence(
+                    AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
+                    textToInject
+                )
+                node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+                node.recycle()
+                rootNode.recycle()
+                return true
+            }
+            node.recycle()
+        }
+        rootNode.recycle()
+        return false
     }
 }
