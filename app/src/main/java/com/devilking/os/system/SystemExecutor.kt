@@ -6,6 +6,7 @@ import android.hardware.camera2.CameraManager
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import android.net.Uri
+import com.devilking.os.automation.DevilkingService
 
 class SystemExecutor(private val context: Context) {
     
@@ -39,7 +40,7 @@ class SystemExecutor(private val context: Context) {
             }
             
             commandText == "scroll" -> {
-                val service = com.devilking.os.system.DevilkingAccessibilityService.instance
+                val service = DevilkingService.instance
                 if (service != null) {
                     service.performSwipeUp()
                     "> [SYSTEM]: Phantom Finger executed. Swiping screen."
@@ -50,13 +51,32 @@ class SystemExecutor(private val context: Context) {
             
             commandText.startsWith("snipe ") -> {
                 val target = commandText.removePrefix("snipe ").trim()
-                val service = com.devilking.os.system.DevilkingAccessibilityService.instance
+                val service = DevilkingService.instance
                 if (service != null) {
                     val success = service.executeSniperStrike(target)
                     if (success) "> [SYSTEM]: Target '$target' acquired and eliminated."
                     else "> [!] SNIPER ERROR: Target '$target' not found."
                 } else {
                     "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
+                }
+            }
+
+            commandText.startsWith("type ") -> {
+                if (commandText.contains(">")) {
+                    val parts = commandText.removePrefix("type ").split(">", limit = 2)
+                    val targetField = parts[0].trim()
+                    val textToInject = parts[1].trim()
+                    
+                    val service = DevilkingService.instance
+                    if (service != null) {
+                        val success = service.executeGhostType(targetField, textToInject)
+                        if (success) "> [SYSTEM]: Ghost Typed '$textToInject' into '$targetField'."
+                        else "> [!] GHOST ERROR: Input field '$targetField' not found on screen."
+                    } else {
+                        "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
+                    }
+                } else {
+                    "> [!] SYNTAX ERROR: Incorrect format. Use -> type [target field] > [text]"
                 }
             }
             
@@ -71,7 +91,6 @@ class SystemExecutor(private val context: Context) {
             val resolver = context.contentResolver
             val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
             val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
-            // Using LIKE allows for partial matches (e.g., "Mike" will find "Mike Smith")
             val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
             val selectionArgs = arrayOf("%$contactName%")
 
