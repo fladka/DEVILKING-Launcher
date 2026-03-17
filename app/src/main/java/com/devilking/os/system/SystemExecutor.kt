@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraManager
 import android.content.pm.PackageManager
+import android.provider.ContactsContract
+import android.net.Uri
 
 class SystemExecutor(private val context: Context) {
     
@@ -21,7 +23,6 @@ class SystemExecutor(private val context: Context) {
     }
 
     fun executeCommand(rawCommand: String): String {
-        // UPGRADED TO PARSE [CMD: ...]
         val commandText = rawCommand.substringAfter("[CMD:").substringBefore("]").trim()
         
         return when {
@@ -30,6 +31,11 @@ class SystemExecutor(private val context: Context) {
             commandText.startsWith("open ") -> {
                 val appName = commandText.removePrefix("open ").lowercase()
                 launchApp(appName)
+            }
+
+            commandText.startsWith("call ") -> {
+                val targetName = commandText.removePrefix("call ").trim()
+                makeCall(targetName)
             }
             
             commandText == "scroll" -> {
@@ -57,6 +63,39 @@ class SystemExecutor(private val context: Context) {
             commandText == "none" -> "> [DEVILKING AI]: Standing by."
             
             else -> "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($commandText)."
+        }
+    }
+
+    private fun makeCall(contactName: String): String {
+        return try {
+            val resolver = context.contentResolver
+            val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+            val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            // Using LIKE allows for partial matches (e.g., "Mike" will find "Mike Smith")
+            val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
+            val selectionArgs = arrayOf("%$contactName%")
+
+            val cursor = resolver.query(uri, projection, selection, selectionArgs, null)
+            
+            if (cursor != null && cursor.moveToFirst()) {
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val phoneNumber = cursor.getString(numberIndex)
+                cursor.close()
+
+                val callIntent = Intent(Intent.ACTION_CALL)
+                callIntent.data = Uri.parse("tel:$phoneNumber")
+                callIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(callIntent)
+                
+                "> [SYSTEM]: Initiating cellular override. Calling $contactName ($phoneNumber)..."
+            } else {
+                cursor?.close()
+                "> [!] ERROR: Target '$contactName' not found in system registry."
+            }
+        } catch (e: SecurityException) {
+            "> [!] ERROR: Security override failed. Ensure CALL_PHONE permission is granted."
+        } catch (e: Exception) {
+            "> [!] ERROR: Telecom matrix failure: ${e.message}"
         }
     }
 
@@ -88,13 +127,10 @@ class SystemExecutor(private val context: Context) {
                 
                 if (launchIntent == null) continue
                 
-                // AEGIS FIREWALL CHECK
                 val isBlacklisted = aegisBlacklist.any { packageName.startsWith(it) }
                 val isWhitelisted = aegisWhitelist.contains(packageName)
                 
-                if (isBlacklisted && !isWhitelisted) {
-                    continue 
-                }
+                if (isBlacklisted && !isWhitelisted) continue 
                 
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
