@@ -13,6 +13,30 @@ class RegexRouter(private val context: Context) {
     fun route(prompt: String): String? {
         val input = prompt.lowercase().trim()
 
+        // 0. THE HELP MENU
+        if (input == "help") {
+            return """
+                *** DEVILKING OS COMMAND REGISTRY ***
+                [ SYSTEM & HARDWARE ]
+                > flashlight    : Toggles device flash
+                > open [app]    : Launches application
+                > call [name]   : Initiates cellular override
+                
+                [ NEURAL MATRIX ]
+                > matrix.init   : Formats memory.json
+                > matrix.export : Backs up brain to Vault
+                > matrix.import : Restores brain from Vault
+                
+                [ GOD MODE: SCREEN AUTOMATION ]
+                > scroll               : Phantom Finger - Swipes up
+                > scroll down          : Phantom Finger - Swipes down
+                > 2x scroll            : Double swipe up
+                > snipe [text]         : Physically clicks target UI
+                > type [UI] > [text]   : Ghost Typing text injection
+                > macro whatsapp > [Name] > [Msg] : Auto-messaging
+            """.trimIndent()
+        }
+
         // 1. MATRIX INITIALIZATION
         if (input == "matrix.init") {
             val defaultJson = """[
@@ -34,12 +58,10 @@ class RegexRouter(private val context: Context) {
         // 2. MATRIX EXPORT
         if (input == "matrix.export") {
             return try {
-                val internalFile = File(context.filesDir, "memory.json")
                 val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
                 if (!vaultDir.exists()) vaultDir.mkdirs()
-                
                 val exportFile = File(vaultDir, "memory.json")
-                internalFile.copyTo(exportFile, overwrite = true)
+                File(context.filesDir, "memory.json").copyTo(exportFile, overwrite = true)
                 "> [SYSTEM]: Matrix exported to Documents/DEVILKING_VAULT/memory.json"
             } catch (e: Exception) {
                 "> [!] EXPORT ERROR: ${e.message}"
@@ -52,8 +74,7 @@ class RegexRouter(private val context: Context) {
                 val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
                 val importFile = File(vaultDir, "memory.json")
                 if (!importFile.exists()) return "> [!] IMPORT ERROR: memory.json not found in Vault."
-                val internalFile = File(context.filesDir, "memory.json")
-                importFile.copyTo(internalFile, overwrite = true)
+                importFile.copyTo(File(context.filesDir, "memory.json"), overwrite = true)
                 "> [SYSTEM]: Matrix imported from Vault. Brain updated."
             } catch (e: Exception) {
                 "> [!] IMPORT ERROR: ${e.message}"
@@ -63,7 +84,6 @@ class RegexRouter(private val context: Context) {
         // 4. CHECK MATRIX MEMORY REFLEXES
         val memoryResult = checkMemoryMatrix(input)
         if (memoryResult != null) {
-            // UPGRADED TO PARSE [CMD:] 
             return if (memoryResult.contains("[CMD:")) {
                 executor.executeCommand(memoryResult)
             } else {
@@ -71,39 +91,18 @@ class RegexRouter(private val context: Context) {
             }
         }
 
-        // 5. TIER 1 FAST-PATH ROUTING (Instant Hardware/OS Execution)
-        if (input == "flashlight" || input == "lumos") {
-            return executor.executeCommand("[CMD: flashlight]")
-        }
+        // 5. TIER 1 FAST-PATH ROUTING
+        if (input == "flashlight" || input == "lumos") return executor.executeCommand("[CMD: flashlight]")
+        if (input.startsWith("open ")) return executor.executeCommand("[CMD: open ${input.removePrefix("open ").trim()}]")
+        if (input.startsWith("call ")) return executor.executeCommand("[CMD: call ${input.removePrefix("call ").trim()}]")
 
-        if (input.startsWith("open ")) {
-            val appName = input.removePrefix("open ").trim()
-            return executor.executeCommand("[CMD: open $appName]")
-        }
+        // 6. GOD MODE RELAYS
+        if (input.startsWith("scroll") || input.startsWith("2x scroll")) return executor.executeCommand("[CMD: $input]")
+        if (input.startsWith("snipe ")) return executor.executeCommand("[CMD: $input]")
+        if (input.startsWith("type ")) return executor.executeCommand("[CMD: $input]")
+        if (input.startsWith("macro ")) return executor.executeCommand("[CMD: $input]")
 
-        if (input.startsWith("call ")) {
-            val contactName = input.removePrefix("call ").trim()
-            return executor.executeCommand("[CMD: call $contactName]")
-        }
-
-        // 6. GOD MODE RELAYS (Screen Automation & Macros)
-        if (input.startsWith("scroll") || input.startsWith("2x scroll")) {
-            return executor.executeCommand("[CMD: $input]")
-        }
-
-        if (input.startsWith("snipe ")) {
-            return executor.executeCommand("[CMD: $input]")
-        }
-
-        if (input.startsWith("type ")) {
-            return executor.executeCommand("[CMD: $input]")
-        }
-
-        if (input.startsWith("macro ")) {
-            return executor.executeCommand("[CMD: $input]")
-        }
-
-        // Return null so the prompt passes through to the heavy Qwen AI model
+        // Return null so it passes to the heavy Qwen AI model
         return null 
     }
 
@@ -115,7 +114,6 @@ class RegexRouter(private val context: Context) {
             val jsonString = memoryFile.readText()
             val jsonArray = JSONArray(jsonString)
 
-            // Check exact variations first
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
                 val exacts = item.getJSONArray("exact_variations")
@@ -124,7 +122,6 @@ class RegexRouter(private val context: Context) {
                 }
             }
 
-            // Check keywords if no exact match
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
                 if (item.has("keywords")) {
