@@ -15,13 +15,12 @@ class LocalAICore(private val context: Context) {
 
     private var isModelLoaded = false
     private val regexRouter = RegexRouter(context)
-    
-    // FIX 1: Removed 'context' parameter to match your exact codebase
     private val vaultManager = VaultManager()
 
     fun checkCoreStatus(): String {
         val privateFile = File(context.filesDir, "brain.gguf")
-        return if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) "> NEURAL CORE LOCATED.\n> Status: Ready for Inference." else "> [!] NEURAL CORE OFFLINE."
+        return if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) "> NEURAL CORE LOCATED.\n> Status: Ready for Inference."
+        else "> [!] NEURAL CORE OFFLINE."
     }
 
     fun injectFromStream(inputStream: InputStream): String {
@@ -32,7 +31,9 @@ class LocalAICore(private val context: Context) {
             val buffer = ByteArray(8192)
             var bytesRead: Int
             while (inputStream.read(buffer).also { bytesRead = it } != -1) outputStream.write(buffer, 0, bytesRead)
-            outputStream.flush(); outputStream.close(); inputStream.close()
+            outputStream.flush()
+            outputStream.close()
+            inputStream.close()
             
             loadModelFromJNI(privateFile.absolutePath)
             isModelLoaded = true
@@ -64,8 +65,8 @@ class LocalAICore(private val context: Context) {
             val rawAnswer = generateResponseFromJNI(formattedPrompt)
             val cleanAnswer = rawAnswer.substringAfter("assistant\n").substringBefore("<|im_end|>").replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
             
-            // THE NERVOUS SYSTEM INTERCEPTOR
-            if (cleanAnswer.contains("[EXECUTE:")) {
+            // THE NERVOUS SYSTEM INTERCEPTOR - UPGRADED FOR 4-BIT GGUF
+            if (cleanAnswer.contains("[CMD:")) {
                 val systemExecutor = com.devilking.os.system.SystemExecutor(context)
                 return systemExecutor.executeCommand(cleanAnswer)
             }
