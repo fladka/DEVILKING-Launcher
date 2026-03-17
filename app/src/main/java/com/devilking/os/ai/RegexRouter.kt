@@ -13,6 +13,7 @@ class RegexRouter(private val context: Context) {
     fun route(prompt: String): String? {
         val input = prompt.lowercase().trim()
 
+        // 1. MATRIX INITIALIZATION
         if (input == "matrix.init") {
             val defaultJson = """[
               {
@@ -23,18 +24,20 @@ class RegexRouter(private val context: Context) {
               {
                 "exact_variations": ["check candle inventory", "order wax"],
                 "keywords": ["candle", "wax"],
-                "answer": "[EXECUTE: LAUNCH_APP_CHROME]"
+                "answer": "[CMD: open chrome]"
               }
             ]"""
             File(context.filesDir, "memory.json").writeText(defaultJson)
             return "> [SYSTEM]: memory.json constructed in local storage. Neural pathways locked."
         }
 
+        // 2. MATRIX EXPORT
         if (input == "matrix.export") {
             return try {
                 val internalFile = File(context.filesDir, "memory.json")
                 val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
                 if (!vaultDir.exists()) vaultDir.mkdirs()
+                
                 val exportFile = File(vaultDir, "memory.json")
                 internalFile.copyTo(exportFile, overwrite = true)
                 "> [SYSTEM]: Matrix exported to Documents/DEVILKING_VAULT/memory.json"
@@ -43,6 +46,7 @@ class RegexRouter(private val context: Context) {
             }
         }
 
+        // 3. MATRIX IMPORT
         if (input == "matrix.import") {
             return try {
                 val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
@@ -56,48 +60,50 @@ class RegexRouter(private val context: Context) {
             }
         }
 
+        // 4. CHECK MATRIX MEMORY REFLEXES
         val memoryResult = checkMemoryMatrix(input)
         if (memoryResult != null) {
-            return if (memoryResult.contains("[EXECUTE:")) {
+            // UPGRADED TO PARSE [CMD:] 
+            return if (memoryResult.contains("[CMD:")) {
                 executor.executeCommand(memoryResult)
             } else {
                 "> [DEVILKING AI]: $memoryResult"
             }
         }
 
-        if (input == "flashlight" || input == "lumos") return executor.executeCommand("[EXECUTE: FLASHLIGHT_TOGGLE]")
+        // 5. TIER 1 FAST-PATH ROUTING (Instant Hardware/OS Execution)
+        if (input == "flashlight" || input == "lumos") {
+            return executor.executeCommand("[CMD: flashlight]")
+        }
+
         if (input.startsWith("open ")) {
             val appName = input.removePrefix("open ").trim()
-            return executor.executeCommand("[EXECUTE: LAUNCH_APP_$appName]")
+            return executor.executeCommand("[CMD: open $appName]")
         }
 
-        // 6. THE PHANTOM FINGER TRIGGER
-        if (input == "scroll") {
-            val service = com.devilking.os.system.DevilkingAccessibilityService.instance
-            if (service != null) {
-                service.performSwipeUp()
-                return "> [SYSTEM]: Phantom Finger executed. Swiping screen."
-            } else {
-                return "> [!] GOD MODE OFFLINE: You must enable DEVILKING OS in Android Accessibility Settings."
-            }
+        if (input.startsWith("call ")) {
+            val contactName = input.removePrefix("call ").trim()
+            return executor.executeCommand("[CMD: call $contactName]")
         }
 
-        // 7. THE SMART UI SNIPER TRIGGER
+        // 6. GOD MODE RELAYS (Screen Automation & Macros)
+        if (input.startsWith("scroll") || input.startsWith("2x scroll")) {
+            return executor.executeCommand("[CMD: $input]")
+        }
+
         if (input.startsWith("snipe ")) {
-            val target = input.removePrefix("snipe ").trim()
-            val service = com.devilking.os.system.DevilkingAccessibilityService.instance
-            if (service != null) {
-                val success = service.executeSniperStrike(target)
-                return if (success) {
-                    "> [SYSTEM]: Target '$target' acquired and eliminated (Clicked)."
-                } else {
-                    "> [!] SNIPER ERROR: Target '$target' not found on current screen view."
-                }
-            } else {
-                return "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
-            }
+            return executor.executeCommand("[CMD: $input]")
         }
 
+        if (input.startsWith("type ")) {
+            return executor.executeCommand("[CMD: $input]")
+        }
+
+        if (input.startsWith("macro ")) {
+            return executor.executeCommand("[CMD: $input]")
+        }
+
+        // Return null so the prompt passes through to the heavy Qwen AI model
         return null 
     }
 
@@ -109,6 +115,7 @@ class RegexRouter(private val context: Context) {
             val jsonString = memoryFile.readText()
             val jsonArray = JSONArray(jsonString)
 
+            // Check exact variations first
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
                 val exacts = item.getJSONArray("exact_variations")
@@ -117,6 +124,7 @@ class RegexRouter(private val context: Context) {
                 }
             }
 
+            // Check keywords if no exact match
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
                 if (item.has("keywords")) {
