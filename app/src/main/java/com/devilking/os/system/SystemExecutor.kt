@@ -39,11 +39,16 @@ class SystemExecutor(private val context: Context) {
                 makeCall(targetName)
             }
             
-            commandText == "scroll" -> {
+            commandText.startsWith("scroll") || commandText.startsWith("2x scroll") -> {
                 val service = DevilkingService.instance
                 if (service != null) {
-                    service.performSwipeUp()
-                    "> [SYSTEM]: Phantom Finger executed. Swiping screen."
+                    when (commandText) {
+                        "scroll" -> service.performSwipeUp()
+                        "scroll down" -> service.performSwipeDown()
+                        "2x scroll" -> service.performDoubleSwipeUp()
+                        "2x scroll down" -> service.performDoubleSwipeDown()
+                    }
+                    "> [SYSTEM]: Phantom Gestures executed."
                 } else {
                     "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
                 }
@@ -77,6 +82,28 @@ class SystemExecutor(private val context: Context) {
                     }
                 } else {
                     "> [!] SYNTAX ERROR: Incorrect format. Use -> type [target field] > [text]"
+                }
+            }
+
+            commandText.startsWith("macro whatsapp ") -> {
+                if (commandText.contains(">")) {
+                    val parts = commandText.removePrefix("macro whatsapp ").split(">", limit = 2)
+                    if (parts.size == 2) {
+                        val contactName = parts[0].trim()
+                        val messageText = parts[1].trim()
+                        
+                        val service = DevilkingService.instance
+                        if (service != null) {
+                            service.executeWhatsAppMacro(contactName, messageText)
+                            "> [SYSTEM]: Macro engaged. Hijacking UI to message $contactName..."
+                        } else {
+                            "> [!] GOD MODE OFFLINE."
+                        }
+                    } else {
+                        "> [!] SYNTAX ERROR: macro whatsapp > [name] > [message]"
+                    }
+                } else {
+                    "> [!] SYNTAX ERROR: macro whatsapp > [name] > [message]"
                 }
             }
             
