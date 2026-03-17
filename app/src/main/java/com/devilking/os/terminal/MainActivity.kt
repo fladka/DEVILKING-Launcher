@@ -12,6 +12,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -35,10 +36,29 @@ class MainActivity : AppCompatActivity() {
     // VOICE RECOGNIZER
     private lateinit var speechRecognizer: SpeechRecognizer
 
+    // THE FILE PICKER FOR CORE INJECTION
+    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            printToTerminal("> [SYSTEM]: Neural Core selected. Injecting...")
+            uiScope.launch(Dispatchers.IO) {
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val result = aiCore.injectFromStream(inputStream)
+                        withContext(Dispatchers.Main) { printToTerminal(result) }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) { printToTerminal("> [!] INJECTION ERROR: ${e.message}") }
+                }
+            }
+        } else {
+            printToTerminal("> [!] INJECTION ABORTED: No file selected.")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Initialize the Brain
         aiCore = LocalAICore(this)
         
         setupUI()
@@ -87,7 +107,6 @@ class MainActivity : AppCompatActivity() {
         }
         terminalRecyclerView.adapter = adapter
 
-        // Horizontal layout for Text Box + Mic Button
         val inputContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -107,6 +126,11 @@ class MainActivity : AppCompatActivity() {
             typeface = android.graphics.Typeface.MONOSPACE
             setBackgroundColor(android.graphics.Color.parseColor("#1F2937"))
             setPadding(24, 24, 24, 24)
+            
+            // THE FIX: Lock to single line and force "Send" action on the keyboard
+            maxLines = 1
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_SEND
         }
 
         micButton = Button(this).apply {
@@ -179,15 +203,19 @@ class MainActivity : AppCompatActivity() {
         micButton.setBackgroundColor(android.graphics.Color.parseColor("#00FF41"))
     }
 
-    // THE EXECUTION ENGINE
     private fun processInput(input: String) {
-        printToTerminal("root@devilking:~$ $input")
+        val cleanInput = input.trim()
+        printToTerminal("root@devilking:~$ $cleanInput")
         commandInput.text.clear()
 
-        // Offload heavy AI processing to background thread
+        // THE FIX: Intercept "inject core" to launch the file picker
+        if (cleanInput.lowercase() == "inject core") {
+            filePickerLauncher.launch("*/*")
+            return
+        }
+
         uiScope.launch(Dispatchers.IO) {
-            val response = aiCore.generateResponse(input)
-            
+            val response = aiCore.generateResponse(cleanInput)
             withContext(Dispatchers.Main) {
                 printToTerminal(response)
             }
