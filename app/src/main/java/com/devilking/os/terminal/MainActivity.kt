@@ -1,178 +1,208 @@
 package com.devilking.os.terminal
 
-import android.net.Uri
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.view.KeyEvent
-import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.widget.Button
 import android.widget.EditText
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
-import com.devilking.os.execution.CommandExecutor
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.devilking.os.ai.LocalAICore
-import com.devilking.os.ai.AIContext
-import kotlin.concurrent.thread
+import kotlinx.coroutines.*
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var terminalRecyclerView: RecyclerView
+    private lateinit var commandInput: EditText
+    private lateinit var micButton: Button
+    private lateinit var adapter: TerminalAdapter
+    private val commandHistory = mutableListOf<String>()
 
-    private lateinit var tvTerminalOutput: TextView
-    private lateinit var etCommandInput: EditText
-    private lateinit var scrollView: ScrollView
-    
-    private lateinit var commandExecutor: CommandExecutor
+    // THE AI CORE LINK
     private lateinit var aiCore: LocalAICore
-    private lateinit var aiContext: AIContext
-
-    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            printToTerminal("> [SYSTEM]: File selected. Commencing secure vault transfer...")
-            thread {
-                try {
-                    val inputStream = contentResolver.openInputStream(uri)
-                    if (inputStream != null) {
-                        val response = aiCore.injectFromStream(inputStream)
-                        runOnUiThread {
-                            printToTerminal(response)
-                            etCommandInput.requestFocus()
-                        }
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread { printToTerminal("> [!] ERROR: ${e.message}") }
-                }
-            }
-        } else {
-            printToTerminal("> [!] ACTION ABORTED: No file selected.")
-        }
-    }
+    private val uiScope = CoroutineScope(Dispatchers.Main + Job())
+    
+    // VOICE RECOGNIZER
+    private lateinit var speechRecognizer: SpeechRecognizer
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        setContentView(R.layout.activity_main)
-        supportActionBar?.hide()
-
-        tvTerminalOutput = findViewById(R.id.tv_terminal_output)
-        etCommandInput = findViewById(R.id.et_command_input)
-        scrollView = findViewById(R.id.scroll_view)
         
-        commandExecutor = CommandExecutor(this)
-        aiCore = LocalAICore(this) 
-        aiContext = AIContext()
+        // Initialize the Brain
+        aiCore = LocalAICore(this)
+        
+        setupUI()
+        setupVoiceAgent()
 
-        if (savedInstanceState != null) {
-            tvTerminalOutput.text = savedInstanceState.getString("terminal_text")
-        }
+        commandHistory.add("DEVILKING OS [Version 1.0.0]")
+        commandHistory.add("> Audio Matrix: Offline. Tap [MIC] to engage.")
+        commandHistory.add(aiCore.checkCoreStatus())
+        adapter.notifyDataSetChanged()
 
-        setupInputListener()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putString("terminal_text", tvTerminalOutput.text.toString())
-    }
-
-    private fun setupInputListener() {
-        etCommandInput.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_DONE || 
-                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                
-                val rawInput = etCommandInput.text.toString().trim()
-                if (rawInput.isNotEmpty()) {
-                    processCommand(rawInput)
+        commandInput.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEND || 
+               (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                val input = commandInput.text.toString().trim()
+                if (input.isNotEmpty()) {
+                    processInput(input)
                 }
                 true
-            } else false
+            } else {
+                false
+            }
+        }
+
+        micButton.setOnClickListener {
+            checkAudioPermissionAndListen()
         }
     }
 
-    private fun evaluateMath(input: String): String? {
-        try {
-            val clean = input.replace("\\s".toRegex(), "").replace("=", "").replace("?", "")
-            val regex = Regex("^(-?\\d+\\.?\\d*)([+\\-*/])(-?\\d+\\.?\\d*)$")
-            val match = regex.find(clean)
-            
-            if (match != null) {
-                val (num1Str, op, num2Str) = match.destructured
-                val num1 = num1Str.toDouble()
-                val num2 = num2Str.toDouble()
-                val result = when (op) {
-                    "+" -> num1 + num2
-                    "-" -> num1 - num2
-                    "*" -> num1 * num2
-                    "/" -> if (num2 != 0.0) num1 / num2 else return "> [!] MATH ERROR: Division by zero."
-                    else -> return null
+    private fun setupUI() {
+        val mainContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        terminalRecyclerView = RecyclerView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+            setBackgroundColor(android.graphics.Color.parseColor("#0a0e27")) 
+        }
+
+        adapter = TerminalAdapter(commandHistory)
+        terminalRecyclerView.layoutManager = LinearLayoutManager(this).apply {
+            stackFromEnd = true
+        }
+        terminalRecyclerView.adapter = adapter
+
+        // Horizontal layout for Text Box + Mic Button
+        val inputContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setBackgroundColor(android.graphics.Color.parseColor("#0f1419"))
+            setPadding(16, 12, 16, 12)
+        }
+
+        commandInput = EditText(this).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            hint = "Enter command..."
+            setHintTextColor(android.graphics.Color.parseColor("#475569"))
+            setTextColor(android.graphics.Color.parseColor("#00FF41"))
+            textSize = 14f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setBackgroundColor(android.graphics.Color.parseColor("#1F2937"))
+            setPadding(24, 24, 24, 24)
+        }
+
+        micButton = Button(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            ).apply { setMargins(16, 0, 0, 0) }
+            text = "[ MIC ]"
+            setTextColor(android.graphics.Color.parseColor("#0a0e27"))
+            setBackgroundColor(android.graphics.Color.parseColor("#00FF41"))
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+
+        inputContainer.addView(commandInput)
+        inputContainer.addView(micButton)
+        mainContainer.addView(terminalRecyclerView)
+        mainContainer.addView(inputContainer)
+
+        setContentView(mainContainer)
+    }
+
+    private fun setupVoiceAgent() {
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                micButton.text = "[ LISTENING ]"
+                micButton.setBackgroundColor(android.graphics.Color.RED)
+            }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                resetMicButton()
+            }
+            override fun onError(error: Int) {
+                resetMicButton()
+                printToTerminal("> [!] AUDIO ERROR: Signal lost or no speech detected.")
+            }
+            override fun onResults(results: Bundle?) {
+                resetMicButton()
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!matches.isNullOrEmpty()) {
+                    val spokenText = matches[0]
+                    processInput(spokenText)
                 }
-                val resultStr = if (result % 1.0 == 0.0) result.toLong().toString() else result.toString()
-                return "> [SYSTEM CALC]: $clean = $resultStr"
             }
-        } catch (e: Exception) { return null }
-        return null
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
     }
 
-    private fun processCommand(input: String) {
-        // THE FIX: Removed the backslash so it prints your actual command
-        printToTerminal("root@devilking:~# $input")
-        etCommandInput.text.clear()
-
-        val mathResult = evaluateMath(input)
-        if (mathResult != null) {
-            printToTerminal(mathResult)
-            return
-        }
-
-        val parts = input.split(Regex("\\s+"), 2)
-        val command = parts[0].lowercase()
-        val target = if (parts.size > 1) parts[1] else ""
-
-        when (command) {
-            "open" -> {
-                if (target.isNotEmpty()) printToTerminal(commandExecutor.launchApp(target))
-                else printToTerminal("> [!] SYNTAX ERROR: 'open' requires a target.")
-            }
-            "help" -> printToTerminal("> SYSTEM DIRECTORY:\n  - open [app]\n  - core (Check AI Status)\n  - inject core (Load AI)\n  - clear (Wipe screen)")
-            "clear" -> tvTerminalOutput.text = ""
-            "core" -> printToTerminal(aiCore.checkCoreStatus())
-            "inject" -> {
-                if (target == "core") {
-                    printToTerminal("> [DEVILKING AI]: Requesting secure file selection...")
-                    filePickerLauncher.launch(arrayOf("*/*")) 
-                } else printToTerminal("> [!] SYNTAX ERROR: Did you mean 'inject core'?")
-            }
-            else -> processAICommand(input)
+    private fun checkAudioPermissionAndListen() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+        } else {
+            startListening()
         }
     }
 
-    private fun processAICommand(input: String) {
-        printToTerminal("> [DEVILKING AI]: Processing intent...")
-        
-        val startTime = System.currentTimeMillis()
-        
-        thread {
-            val response = aiCore.generateResponse(input) 
-            val timeTaken = System.currentTimeMillis() - startTime
+    private fun startListening() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+        }
+        speechRecognizer.startListening(intent)
+    }
+
+    private fun resetMicButton() {
+        micButton.text = "[ MIC ]"
+        micButton.setBackgroundColor(android.graphics.Color.parseColor("#00FF41"))
+    }
+
+    // THE EXECUTION ENGINE
+    private fun processInput(input: String) {
+        printToTerminal("root@devilking:~$ $input")
+        commandInput.text.clear()
+
+        // Offload heavy AI processing to background thread
+        uiScope.launch(Dispatchers.IO) {
+            val response = aiCore.generateResponse(input)
             
-            runOnUiThread {
+            withContext(Dispatchers.Main) {
                 printToTerminal(response)
-                
-                if (timeTaken > 1500) {
-                    Toast.makeText(this@MainActivity, "DEVILKING AI: Thought Complete", Toast.LENGTH_SHORT).show()
-                }
-                
-                etCommandInput.requestFocus()
             }
         }
     }
 
     private fun printToTerminal(text: String) {
-        tvTerminalOutput.append(text + "\n")
-        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+        commandHistory.add(text)
+        adapter.notifyDataSetChanged()
+        terminalRecyclerView.scrollToPosition(commandHistory.size - 1)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        speechRecognizer.destroy()
+        uiScope.cancel()
     }
 }
