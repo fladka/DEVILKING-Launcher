@@ -63,24 +63,12 @@ class MainActivity : AppCompatActivity() {
         
         setupUI()
         setupVoiceAgent()
+        setupKeyboardTraps()
 
         commandHistory.add("DEVILKING OS [Version 1.0.0]")
         commandHistory.add("> Audio Matrix: Offline. Tap [MIC] to engage.")
         commandHistory.add(aiCore.checkCoreStatus())
         adapter.notifyDataSetChanged()
-
-        commandInput.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_SEND || 
-               (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                val input = commandInput.text.toString().trim()
-                if (input.isNotEmpty()) {
-                    processInput(input)
-                }
-                true
-            } else {
-                false
-            }
-        }
 
         micButton.setOnClickListener {
             checkAudioPermissionAndListen()
@@ -127,8 +115,9 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(android.graphics.Color.parseColor("#1F2937"))
             setPadding(24, 24, 24, 24)
             
-            // THE FIX: Lock to single line and force "Send" action on the keyboard
+            // LOCK TO SINGLE LINE
             maxLines = 1
+            isSingleLine = true
             inputType = android.text.InputType.TYPE_CLASS_TEXT
             imeOptions = EditorInfo.IME_ACTION_SEND
         }
@@ -150,6 +139,33 @@ class MainActivity : AppCompatActivity() {
         mainContainer.addView(inputContainer)
 
         setContentView(mainContainer)
+    }
+
+    private fun setupKeyboardTraps() {
+        // THE BULLETPROOF ENTER KEY TRAP
+        commandInput.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_ENTER) {
+                val input = commandInput.text.toString().trim()
+                if (input.isNotEmpty()) {
+                    processInput(input)
+                }
+                return@setOnKeyListener true // Consume the Enter key instantly
+            }
+            false
+        }
+
+        // CATCHES VIRTUAL KEYBOARD "SEND" BUTTON
+        commandInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
+                val input = commandInput.text.toString().trim()
+                if (input.isNotEmpty()) {
+                    processInput(input)
+                }
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private fun setupVoiceAgent() {
@@ -208,7 +224,7 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("root@devilking:~$ $cleanInput")
         commandInput.text.clear()
 
-        // THE FIX: Intercept "inject core" to launch the file picker
+        // INTERCEPT INJECT CORE COMMAND
         if (cleanInput.lowercase() == "inject core") {
             filePickerLauncher.launch("*/*")
             return
