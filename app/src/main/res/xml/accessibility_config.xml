@@ -5,5 +5,4 @@
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagRequestFilterKeyEvents|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
-    android:canRequestFilterKeyEvents="true"
-    android:description="DEVILKING OS God Mode Automation Matrix" />
+    android:canRequestFilterKeyEvents="true" />
