@@ -3,9 +3,11 @@ package com.devilking.os.automation
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
+import android.content.Context
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -32,12 +34,14 @@ class DevilkingService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        Log.d("DEVILKING_SYS", "God Mode Online. Native Matrix Scanner Active.")
+        Log.d("DEVILKING_SYS", "God Mode Online. Volume Control Restored.")
     }
 
+    // --- UPGRADED HARDWARE HIJACK (RESTORES NORMAL VOLUME CONTROL) ---
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val action = event.action
         val keyCode = event.keyCode
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             if (action == KeyEvent.ACTION_DOWN) {
@@ -46,7 +50,12 @@ class DevilkingService : AccessibilityService() {
             } else if (action == KeyEvent.ACTION_UP) {
                 val duration = System.currentTimeMillis() - volDownPressTime
                 volDownPressTime = 0L
-                if (duration > 500) sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
+                if (duration > 500) {
+                    sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
+                } else {
+                    // Quick press: Turn volume down manually
+                    audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                }
                 return true
             }
         }
@@ -58,7 +67,12 @@ class DevilkingService : AccessibilityService() {
             } else if (action == KeyEvent.ACTION_UP) {
                 val duration = System.currentTimeMillis() - volUpPressTime
                 volUpPressTime = 0L
-                if (duration > 500) executePhantomTap(540f, 1200f)
+                if (duration > 500) {
+                    executePhantomTap(540f, 1200f) // Silent Media Pause
+                } else {
+                    // Quick press: Turn volume up manually
+                    audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                }
                 return true
             }
         }
@@ -101,14 +115,12 @@ class DevilkingService : AccessibilityService() {
         Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
-    // --- TIER 6: THE MATRIX DUMPER (UPGRADED FOR INVISIBLE FILTERING) ---
     fun dumpScreenMatrix(): String {
         val sb = StringBuilder()
         sb.append("\n--- ACTIVE SCREEN MATRIX ---\n")
         var counter = 1
 
         fun scanNode(node: AccessibilityNodeInfo) {
-            // THE FIX: Ignore off-screen, hidden, or background ghost elements
             if (node.isVisibleToUser) {
                 val text = node.text?.toString() ?: ""
                 val desc = node.contentDescription?.toString() ?: ""
@@ -148,13 +160,11 @@ class DevilkingService : AccessibilityService() {
         return sb.toString()
     }
 
-    // --- UPGRADED LETHAL SNIPER ---
     fun executeSniperStrike(targetText: String): Boolean {
         val targetLower = targetText.lowercase()
         var bestNode: AccessibilityNodeInfo? = null
 
         fun scanNodesForSniper(node: AccessibilityNodeInfo) {
-            // THE FIX: Only look at visible elements
             if (node.isVisibleToUser) {
                 val text = node.text?.toString()?.lowercase() ?: ""
                 val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
@@ -162,16 +172,13 @@ class DevilkingService : AccessibilityService() {
                     node.hintText?.toString()?.lowercase() ?: ""
                 } else ""
 
-                // THE FIX: Ignore terminal logs AND the new Matrix Dump output
                 if (text.startsWith("root@devilking:~") || text.startsWith("> [") || text.contains("--- active screen matrix ---")) {
-                    // Skip
                 } else if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
                     if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
                         bestNode = node
                     }
                 }
             }
-
             for (i in 0 until node.childCount) {
                 val child = node.getChild(i) ?: continue
                 scanNodesForSniper(child)
@@ -191,13 +198,11 @@ class DevilkingService : AccessibilityService() {
         return false
     }
 
-    // --- UPGRADED AUTO-FOCUS INJECTOR ---
     fun executeGhostType(textToInject: String): Boolean {
         var targetNode: AccessibilityNodeInfo? = null
 
         fun findEditable(node: AccessibilityNodeInfo) {
             if (targetNode != null) return
-            // THE FIX: Must be visible to be injected
             if (node.isVisibleToUser && (node.isEditable || node.className?.toString()?.contains("EditText") == true)) {
                 targetNode = node
                 return
@@ -222,7 +227,7 @@ class DevilkingService : AccessibilityService() {
         return false
     }
 
-    // --- UPGRADED WHATSAPP ENGINE ---
+    // --- UPGRADED WHATSAPP ENGINE (BLIND TAP FALLBACK) ---
     fun executeWhatsAppMacro(contactName: String, messageText: String) {
         serviceScope.launch {
             val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp")
@@ -236,7 +241,10 @@ class DevilkingService : AccessibilityService() {
             delay(1500)
             executeGhostType(contactName)
             delay(2000) 
-            executeSniperStrike(contactName)
+            
+            // THE FIX: Blind tap the first search result directly in the center to avoid profile pics
+            executePhantomTap(540f, 500f) 
+            
             delay(2000)
             executeGhostType(messageText)
             delay(1000)
