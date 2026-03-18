@@ -13,6 +13,7 @@ class SystemExecutor(private val context: Context) {
     fun executeCommand(commandString: String): String {
         val cmd = commandString.removePrefix("[CMD: ").removeSuffix("]").trim()
 
+        // 1. AEGIS FIREWALL WHITELIST
         val isSafe = cmd.startsWith("flashlight") ||
                      cmd.startsWith("open ") ||
                      cmd.startsWith("call ") ||
@@ -21,12 +22,14 @@ class SystemExecutor(private val context: Context) {
                      cmd.startsWith("snipe ") ||
                      cmd.startsWith("type ") ||
                      cmd.startsWith("macro ") ||
-                     cmd == "settings"
+                     cmd == "settings" ||
+                     cmd == "scan screen" // NEW: Tier 6 UI Scanner
 
         if (!isSafe) {
             return "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($cmd)."
         }
 
+        // TIER 0: SETTINGS MATRIX LAUNCHER
         if (cmd == "settings") {
             val intent = Intent(context, com.devilking.os.terminal.SettingsActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -34,18 +37,28 @@ class SystemExecutor(private val context: Context) {
             return "> [SYSTEM]: Initializing Neural Settings Matrix..."
         }
 
+        // TIER 1: HARDWARE CONTROLS
         if (cmd == "flashlight") return toggleFlashlight()
         if (cmd.startsWith("call ")) return initiateCall(cmd.removePrefix("call ").trim())
         if (cmd.startsWith("open ")) return launchApp(cmd.removePrefix("open ").trim())
 
+        // TIER 4/6: GOD MODE RELAYS (Accessibility)
         val godMode = com.devilking.os.automation.DevilkingService.instance
             ?: return "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
 
+        // NEW TIER 6: UI MATRIX DUMP
+        if (cmd == "scan screen") {
+            val matrixDump = godMode.dumpScreenMatrix()
+            return matrixDump
+        }
+
+        // PHANTOM GESTURES
         if (cmd == "scroll" || cmd == "scroll up") { godMode.performSwipeUp(); return "> [SYSTEM]: Swiping Up." }
         if (cmd == "scroll down") { godMode.performSwipeDown(); return "> [SYSTEM]: Swiping Down." }
         if (cmd == "2x scroll" || cmd == "2x scroll up") { godMode.performDoubleSwipeUp(); return "> [SYSTEM]: Double Swiping Up." }
         if (cmd == "2x scroll down" || cmd == "2xscroll down") { godMode.performDoubleSwipeDown(); return "> [SYSTEM]: Double Swiping Down." }
 
+        // MACRO ENGINE
         if (cmd.startsWith("macro whatsapp")) {
             val payload = cmd.removePrefix("macro whatsapp").trim().removePrefix(">").trim()
             val parts = payload.split(">").map { it.trim() }
@@ -56,13 +69,14 @@ class SystemExecutor(private val context: Context) {
             return "> [!] MACRO SYNTAX ERROR."
         }
 
+        // LETHAL SNIPER
         if (cmd.startsWith("snipe ")) {
             val target = cmd.removePrefix("snipe ").trim().replace("[", "").replace("]", "").trim()
             val success = godMode.executeSniperStrike(target)
             return if (success) "> [SYSTEM]: Sniper Strike confirmed on '$target'." else "> [!] SNIPER ERROR: Target '$target' not found."
         }
 
-        // UPGRADED: Auto-Focus Injector (No longer needs a target UI name)
+        // AUTO-FOCUS INJECTOR
         if (cmd.startsWith("type ")) {
             val payload = cmd.removePrefix("type ").trim()
             val success = godMode.executeGhostType(payload)
