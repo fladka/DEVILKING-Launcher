@@ -28,9 +28,12 @@ class DevilkingService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        val info = accessibilityServiceInfo ?: AccessibilityServiceInfo()
+        
+        // THE FIX: 'serviceInfo' is the correct Kotlin property
+        val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-        accessibilityServiceInfo = info
+        serviceInfo = info
+        
         Log.d("DEVILKING_SYS", "God Mode Online. Volume Hijack Active.")
     }
 
@@ -95,6 +98,12 @@ class DevilkingService : AccessibilityService() {
     fun performDoubleSwipeUp() {
         performSwipeUp()
         Handler(Looper.getMainLooper()).postDelayed({ performSwipeUp() }, 600)
+    }
+
+    // THE FIX: Restored the missing Double Swipe Down function
+    fun performDoubleSwipeDown() {
+        performSwipeDown()
+        Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
     // --- THE LETHAL RECURSIVE SNIPER ---
