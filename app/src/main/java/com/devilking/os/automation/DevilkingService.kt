@@ -116,7 +116,6 @@ class DevilkingService : AccessibilityService() {
             
             val uiType = node.className?.toString()?.split(".")?.last() ?: "UI Element"
 
-            // Only capture elements that are useful to the AI (text, buttons, inputs, images with descriptions)
             if (text.isNotEmpty() || desc.isNotEmpty() || hint.isNotEmpty() || node.isClickable || node.isEditable) {
                 val rect = Rect()
                 node.getBoundsInScreen(rect)
