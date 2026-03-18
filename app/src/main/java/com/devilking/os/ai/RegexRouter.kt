@@ -5,33 +5,31 @@ import com.devilking.os.system.SystemExecutor
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import android.os.Environment
 
 class RegexRouter(private val context: Context) {
     
     private val executor = SystemExecutor(context)
 
     fun route(prompt: String): String? {
+        // We keep 'prompt' in original casing for saving memory, but use 'input' for routing checks
         val input = prompt.lowercase().trim()
 
-        // 0. CUSTOM MACRO DATABASE INTERCEPTOR
         val prefs = context.getSharedPreferences("DEVILKING_MACROS", Context.MODE_PRIVATE)
         val customAction = prefs.getString(input, null)
         if (customAction != null) {
             return executor.executeCommand("[CMD: $customAction]")
         }
 
-        // 1. THE NEW DYNAMIC LEARN COMMAND
+        // THE FIX: Preserve Uppercase Letters for the response payload
         if (input.startsWith("learn ")) {
-            val payload = input.removePrefix("learn ").trim()
+            val payload = prompt.substring(6).trim() 
             val parts = payload.split(">").map { it.trim() }
             if (parts.size >= 2) {
-                return addMemory(parts[0], parts[1])
+                return addMemory(parts[0].lowercase(), parts[1])
             }
             return "> [!] LEARN SYNTAX ERROR: Use 'learn [phrase] > [action/response]'"
         }
 
-        // 2. THE HELP MENU
         if (input == "help") {
             return """
                 *** DEVILKING OS COMMAND REGISTRY ***
@@ -49,17 +47,22 @@ class RegexRouter(private val context: Context) {
             """.trimIndent()
         }
 
-        // Initialize default memory internally
         if (input == "matrix.init") {
             val defaultJson = """[{"exact_variations": ["who am i"], "answer": "You are the Architect."}]"""
             File(context.filesDir, "memory.json").writeText(defaultJson)
             return "> [SYSTEM]: Internal matrix initialized."
         }
 
+        // THE FIX: Ignore case-sensitivity when checking for the [CMD: ] tag
         val memoryResult = checkMemoryMatrix(input)
-        if (memoryResult != null) return if (memoryResult.contains("[CMD:")) executor.executeCommand(memoryResult) else "> [DEVILKING AI]: $memoryResult"
+        if (memoryResult != null) {
+            return if (memoryResult.uppercase().contains("[CMD:")) {
+                executor.executeCommand(memoryResult.replace("[cmd:", "[CMD:", ignoreCase = true))
+            } else {
+                "> [DEVILKING AI]: $memoryResult"
+            }
+        }
 
-        // FAST PATHS
         if (input == "settings") return executor.executeCommand("[CMD: settings]")
         if (input == "scan screen") return executor.executeCommand("[CMD: scan screen]") 
         if (input == "flashlight" || input == "lumos") return executor.executeCommand("[CMD: flashlight]")
@@ -80,7 +83,7 @@ class RegexRouter(private val context: Context) {
             
             val newItem = JSONObject()
             val exacts = JSONArray()
-            exacts.put(trigger.lowercase())
+            exacts.put(trigger)
             newItem.put("exact_variations", exacts)
             newItem.put("answer", response)
             
