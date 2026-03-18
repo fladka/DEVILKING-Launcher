@@ -27,7 +27,6 @@ class SystemExecutor(private val context: Context) {
             return "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($cmd)."
         }
 
-        // TIER 0: SETTINGS MATRIX LAUNCHER
         if (cmd == "settings") {
             val intent = Intent(context, com.devilking.os.terminal.SettingsActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -63,13 +62,11 @@ class SystemExecutor(private val context: Context) {
             return if (success) "> [SYSTEM]: Sniper Strike confirmed on '$target'." else "> [!] SNIPER ERROR: Target '$target' not found."
         }
 
+        // UPGRADED: Auto-Focus Injector (No longer needs a target UI name)
         if (cmd.startsWith("type ")) {
             val payload = cmd.removePrefix("type ").trim()
-            val parts = payload.split(">").map { it.trim() }
-            if (parts.size >= 2) {
-                val success = godMode.executeGhostType(parts[0], parts[1])
-                return if (success) "> [SYSTEM]: Ghost Typed into '${parts[0]}'." else "> [!] TYPE ERROR: Target field not found."
-            }
+            val success = godMode.executeGhostType(payload)
+            return if (success) "> [SYSTEM]: Ghost Typed '$payload'." else "> [!] TYPE ERROR: No active input field found."
         }
 
         return "> [!] EXECUTOR ERROR."
