@@ -5,7 +5,6 @@ import android.content.Intent
 import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.ContactsContract
-import android.util.Log
 
 class SystemExecutor(private val context: Context) {
 
@@ -14,11 +13,12 @@ class SystemExecutor(private val context: Context) {
     fun executeCommand(commandString: String): String {
         val cmd = commandString.removePrefix("[CMD: ").removeSuffix("]").trim()
 
-        // 1. AEGIS FIREWALL (Whitelist)
+        // 1. AEGIS FIREWALL (Whitelist upgraded to allow 2x)
         val isSafe = cmd.startsWith("flashlight") ||
                      cmd.startsWith("open ") ||
                      cmd.startsWith("call ") ||
                      cmd.startsWith("scroll") ||
+                     cmd.startsWith("2x ") || 
                      cmd.startsWith("snipe ") ||
                      cmd.startsWith("type ") ||
                      cmd.startsWith("macro ")
@@ -42,11 +42,14 @@ class SystemExecutor(private val context: Context) {
         if (cmd == "scroll down") {
             godMode.performSwipeDown(); return "> [SYSTEM]: Phantom Finger - Swiping Down."
         }
-        if (cmd == "2x scroll") {
+        if (cmd == "2x scroll" || cmd == "2x scroll up") {
             godMode.performDoubleSwipeUp(); return "> [SYSTEM]: Phantom Finger - Double Swiping Up."
         }
+        if (cmd == "2x scroll down" || cmd == "2xscroll down") {
+            godMode.performDoubleSwipeDown(); return "> [SYSTEM]: Phantom Finger - Double Swiping Down."
+        }
 
-        // BULLETPROOF MACRO PARSING
+        // MACRO ENGINE
         if (cmd.startsWith("macro whatsapp")) {
             val payload = cmd.removePrefix("macro whatsapp").trim().removePrefix(">").trim()
             val parts = payload.split(">").map { it.trim() }
@@ -58,7 +61,7 @@ class SystemExecutor(private val context: Context) {
             }
         }
 
-        // SNIPER STRIPPER (Removes brackets to allow 'snipe mic' or 'snipe [ MIC ]' to work equally)
+        // LETHAL SNIPER
         if (cmd.startsWith("snipe ")) {
             val target = cmd.removePrefix("snipe ").trim()
             val cleanTarget = target.replace("[", "").replace("]", "").trim()
@@ -67,7 +70,7 @@ class SystemExecutor(private val context: Context) {
                    else "> [!] SNIPER ERROR: Target '$cleanTarget' not found on screen."
         }
 
-        // TYPE RELAY
+        // GHOST TYPING
         if (cmd.startsWith("type ")) {
             val payload = cmd.removePrefix("type ").trim()
             val parts = payload.split(">").map { it.trim() }
@@ -99,7 +102,6 @@ class SystemExecutor(private val context: Context) {
         for (app in packages) {
             val name = pm.getApplicationLabel(app).toString().lowercase()
             if (name.contains(appName.lowercase())) {
-                // AEGIS check to prevent launching restricted Vivo packages
                 if (app.packageName.contains("com.vivo.") && !app.packageName.contains("calculator")) continue
                 val intent = pm.getLaunchIntentForPackage(app.packageName)
                 if (intent != null) {
@@ -136,7 +138,7 @@ class SystemExecutor(private val context: Context) {
                 callIntent.data = Uri.parse("tel:$phoneNum")
                 callIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(callIntent)
-                "> [SYSTEM]: Initiating cellular override. Calling $contactName ($phoneNum)..."
+                "> [SYSTEM]: Initiating cellular override. Calling $contactName..."
             } else {
                 "> [!] TELEPHONY ERROR: Contact '$contactName' not found or has no number."
             }
