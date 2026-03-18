@@ -32,7 +32,7 @@ class DevilkingService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        Log.d("DEVILKING_SYS", "God Mode Online. Multi-Window Deep Scan Active.")
+        Log.d("DEVILKING_SYS", "God Mode Online. Physical Tap Engine Active.")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -101,75 +101,80 @@ class DevilkingService : AccessibilityService() {
         Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
-    // --- UPGRADED LETHAL DEEP SCANNER ---
-    private fun scanNodes(node: AccessibilityNodeInfo, targetLower: String): AccessibilityNodeInfo? {
-        val text = node.text?.toString()?.lowercase() ?: ""
-        val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
-        val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            node.hintText?.toString()?.lowercase() ?: ""
-        } else ""
-
-        if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) return node
-
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val result = scanNodes(child, targetLower)
-            if (result != null) return result
-        }
-        return null
-    }
-
+    // --- UPGRADED LETHAL SNIPER ---
     fun executeSniperStrike(targetText: String): Boolean {
         val targetLower = targetText.lowercase()
-        var foundNode: AccessibilityNodeInfo? = null
+        var bestNode: AccessibilityNodeInfo? = null
 
-        // Deep Scan: Check all active interactive windows (keyboards, apps, overlays)
-        val windowList = windows
-        for (window in windowList) {
-            val root = window.root ?: continue
-            foundNode = scanNodes(root, targetLower)
-            if (foundNode != null) break
+        fun scanNodes(node: AccessibilityNodeInfo) {
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                node.hintText?.toString()?.lowercase() ?: ""
+            } else ""
+
+            // Ignore our own terminal logs so it doesn't click history
+            if (text.startsWith("root@devilking:~") || text.startsWith("> [")) {
+                // Skip
+            } else if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
+                // Prefer elements that are actual buttons or clickable
+                if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
+                    bestNode = node
+                }
+            }
+
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                scanNodes(child)
+            }
         }
 
-        if (foundNode != null) {
-            var clickableNode: AccessibilityNodeInfo? = foundNode
-            while (clickableNode != null && !clickableNode.isClickable) {
-                clickableNode = clickableNode.parent
-            }
-            if (clickableNode != null) {
-                clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                return true
-            } else {
-                // FALLBACK: If Android denies digital click, calculate coordinates and Phantom Tap it physically
-                val rect = Rect()
-                foundNode.getBoundsInScreen(rect)
-                executePhantomTap(rect.centerX().toFloat(), rect.centerY().toFloat())
-                return true
-            }
+        for (window in windows) {
+            window.root?.let { scanNodes(it) }
+        }
+
+        if (bestNode != null) {
+            // FORCE PHYSICAL X/Y TAP: Calculate coordinates and tap the glass
+            val rect = Rect()
+            bestNode!!.getBoundsInScreen(rect)
+            executePhantomTap(rect.centerX().toFloat(), rect.centerY().toFloat())
+            return true
         }
         return false
     }
 
-    fun executeGhostType(targetField: String, textToInject: String): Boolean {
-        val targetLower = targetField.lowercase()
+    // --- UPGRADED AUTO-FOCUS INJECTOR ---
+    fun executeGhostType(textToInject: String): Boolean {
         var targetNode: AccessibilityNodeInfo? = null
 
-        val windowList = windows
-        for (window in windowList) {
-            val root = window.root ?: continue
-            targetNode = scanNodes(root, targetLower)
+        fun findEditable(node: AccessibilityNodeInfo) {
+            if (targetNode != null) return
+            // Finds the FIRST available text box on the screen
+            if (node.isEditable || node.className?.toString()?.contains("EditText") == true) {
+                targetNode = node
+                return
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                findEditable(child)
+            }
+        }
+
+        for (window in windows) {
+            window.root?.let { findEditable(it) }
             if (targetNode != null) break
         }
         
         if (targetNode != null) {
             val arguments = Bundle()
             arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, textToInject)
-            targetNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+            targetNode!!.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
             return true
         }
         return false
     }
 
+    // --- UPGRADED WHATSAPP ENGINE ---
     fun executeWhatsAppMacro(contactName: String, messageText: String) {
         serviceScope.launch {
             val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp")
@@ -178,17 +183,16 @@ class DevilkingService : AccessibilityService() {
                 startActivity(launchIntent)
             } else return@launch 
 
-            // WhatsApp specific timings and targeting
-            delay(3000) 
-            executeSniperStrike("Search") 
-            delay(1000)
-            executeGhostType("Search", contactName) 
-            delay(1500) 
-            executeSniperStrike(contactName)
+            delay(3000) // Wait for WhatsApp to fully open
+            executeSniperStrike("Search") // Clicks the magnifying glass
             delay(1500)
-            executeGhostType("Message", messageText)
+            executeGhostType(contactName) // Auto-injects name into search bar
+            delay(2000) 
+            executeSniperStrike(contactName) // Clicks the resulting contact
+            delay(2000)
+            executeGhostType(messageText) // Auto-injects message into chat box
             delay(1000)
-            executeSniperStrike("Send")
+            executeSniperStrike("Send") // Clicks the send arrow
         }
     }
 }
