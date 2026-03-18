@@ -30,6 +30,7 @@ class RegexRouter(private val context: Context) {
                 > call [name]   : Initiates cellular override
                 
                 [ GOD MODE: SCREEN AUTOMATION ]
+                > scan screen   : Dumps UI Matrix coordinates
                 > scroll        : Phantom Finger swiping
                 > snipe [text]  : Physically clicks UI
                 > type [UI]>[t] : Ghost Typing text
@@ -64,6 +65,10 @@ class RegexRouter(private val context: Context) {
 
         // FAST PATHS
         if (input == "settings") return executor.executeCommand("[CMD: settings]")
+        
+        // THE MISSING LINK: Routing the scanner to the Executor
+        if (input == "scan screen") return executor.executeCommand("[CMD: scan screen]") 
+        
         if (input == "flashlight" || input == "lumos") return executor.executeCommand("[CMD: flashlight]")
         if (input.startsWith("open ")) return executor.executeCommand("[CMD: open ${input.removePrefix("open ").trim()}]")
         if (input.startsWith("call ")) return executor.executeCommand("[CMD: call ${input.removePrefix("call ").trim()}]")
