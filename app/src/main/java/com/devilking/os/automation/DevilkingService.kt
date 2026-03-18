@@ -32,7 +32,7 @@ class DevilkingService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        Log.d("DEVILKING_SYS", "God Mode Online. Physical Tap Engine Active.")
+        Log.d("DEVILKING_SYS", "God Mode Online. Native Matrix Scanner Active.")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -101,23 +101,66 @@ class DevilkingService : AccessibilityService() {
         Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
+    // --- TIER 6: THE NATIVE MATRIX DUMPER ---
+    fun dumpScreenMatrix(): String {
+        val sb = StringBuilder()
+        sb.append("\n--- ACTIVE SCREEN MATRIX ---\n")
+        var counter = 1
+
+        fun scanNode(node: AccessibilityNodeInfo) {
+            val text = node.text?.toString() ?: ""
+            val desc = node.contentDescription?.toString() ?: ""
+            val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                node.hintText?.toString() ?: ""
+            } else ""
+            
+            val uiType = node.className?.toString()?.split(".")?.last() ?: "UI Element"
+
+            // Only capture elements that are useful to the AI (text, buttons, inputs, images with descriptions)
+            if (text.isNotEmpty() || desc.isNotEmpty() || hint.isNotEmpty() || node.isClickable || node.isEditable) {
+                val rect = Rect()
+                node.getBoundsInScreen(rect)
+                
+                var label = text
+                if (label.isEmpty()) label = hint
+                if (label.isEmpty()) label = desc
+                if (label.isEmpty() && node.isClickable) label = "Unnamed Button"
+
+                if (label.isNotEmpty() && rect.width() > 0 && rect.height() > 0) {
+                    sb.append("[$counter] $uiType: '$label' (Center X: ${rect.centerX()}, Y: ${rect.centerY()})\n")
+                    counter++
+                }
+            }
+
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                scanNode(child)
+            }
+        }
+
+        for (window in windows) {
+            window.root?.let { scanNode(it) }
+        }
+
+        if (counter == 1) return "> [!] MATRIX SCAN FAILED: Screen is hidden or empty."
+        return sb.toString()
+    }
+
     // --- UPGRADED LETHAL SNIPER ---
     fun executeSniperStrike(targetText: String): Boolean {
         val targetLower = targetText.lowercase()
         var bestNode: AccessibilityNodeInfo? = null
 
-        fun scanNodes(node: AccessibilityNodeInfo) {
+        fun scanNodesForSniper(node: AccessibilityNodeInfo) {
             val text = node.text?.toString()?.lowercase() ?: ""
             val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
             val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 node.hintText?.toString()?.lowercase() ?: ""
             } else ""
 
-            // Ignore our own terminal logs so it doesn't click history
             if (text.startsWith("root@devilking:~") || text.startsWith("> [")) {
-                // Skip
+                // Skip terminal logs
             } else if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
-                // Prefer elements that are actual buttons or clickable
                 if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
                     bestNode = node
                 }
@@ -125,16 +168,15 @@ class DevilkingService : AccessibilityService() {
 
             for (i in 0 until node.childCount) {
                 val child = node.getChild(i) ?: continue
-                scanNodes(child)
+                scanNodesForSniper(child)
             }
         }
 
         for (window in windows) {
-            window.root?.let { scanNodes(it) }
+            window.root?.let { scanNodesForSniper(it) }
         }
 
         if (bestNode != null) {
-            // FORCE PHYSICAL X/Y TAP: Calculate coordinates and tap the glass
             val rect = Rect()
             bestNode!!.getBoundsInScreen(rect)
             executePhantomTap(rect.centerX().toFloat(), rect.centerY().toFloat())
@@ -149,7 +191,6 @@ class DevilkingService : AccessibilityService() {
 
         fun findEditable(node: AccessibilityNodeInfo) {
             if (targetNode != null) return
-            // Finds the FIRST available text box on the screen
             if (node.isEditable || node.className?.toString()?.contains("EditText") == true) {
                 targetNode = node
                 return
@@ -183,16 +224,16 @@ class DevilkingService : AccessibilityService() {
                 startActivity(launchIntent)
             } else return@launch 
 
-            delay(3000) // Wait for WhatsApp to fully open
-            executeSniperStrike("Search") // Clicks the magnifying glass
+            delay(3000)
+            executeSniperStrike("Search")
             delay(1500)
-            executeGhostType(contactName) // Auto-injects name into search bar
+            executeGhostType(contactName)
             delay(2000) 
-            executeSniperStrike(contactName) // Clicks the resulting contact
+            executeSniperStrike(contactName)
             delay(2000)
-            executeGhostType(messageText) // Auto-injects message into chat box
+            executeGhostType(messageText)
             delay(1000)
-            executeSniperStrike("Send") // Clicks the send arrow
+            executeSniperStrike("Send")
         }
     }
 }
