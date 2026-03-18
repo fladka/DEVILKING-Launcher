@@ -37,7 +37,6 @@ class DevilkingService : AccessibilityService() {
         Log.d("DEVILKING_SYS", "God Mode Online. Volume Control Restored.")
     }
 
-    // --- UPGRADED HARDWARE HIJACK (RESTORES NORMAL VOLUME CONTROL) ---
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val action = event.action
         val keyCode = event.keyCode
@@ -53,8 +52,8 @@ class DevilkingService : AccessibilityService() {
                 if (duration > 500) {
                     sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
                 } else {
-                    // Quick press: Turn volume down manually
-                    audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                    // THE FIX: Direct Volume Control via System Stream
+                    audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 }
                 return true
             }
@@ -68,10 +67,10 @@ class DevilkingService : AccessibilityService() {
                 val duration = System.currentTimeMillis() - volUpPressTime
                 volUpPressTime = 0L
                 if (duration > 500) {
-                    executePhantomTap(540f, 1200f) // Silent Media Pause
+                    executePhantomTap(540f, 1200f) 
                 } else {
-                    // Quick press: Turn volume up manually
-                    audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                    // THE FIX: Direct Volume Control via System Stream
+                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                 }
                 return true
             }
@@ -227,7 +226,6 @@ class DevilkingService : AccessibilityService() {
         return false
     }
 
-    // --- UPGRADED WHATSAPP ENGINE (BLIND TAP FALLBACK) ---
     fun executeWhatsAppMacro(contactName: String, messageText: String) {
         serviceScope.launch {
             val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp")
@@ -241,10 +239,7 @@ class DevilkingService : AccessibilityService() {
             delay(1500)
             executeGhostType(contactName)
             delay(2000) 
-            
-            // THE FIX: Blind tap the first search result directly in the center to avoid profile pics
             executePhantomTap(540f, 500f) 
-            
             delay(2000)
             executeGhostType(messageText)
             delay(1000)
