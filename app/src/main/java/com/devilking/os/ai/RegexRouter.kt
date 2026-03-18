@@ -3,6 +3,7 @@ package com.devilking.os.ai
 import android.content.Context
 import com.devilking.os.system.SystemExecutor
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import android.os.Environment
 
@@ -20,12 +21,22 @@ class RegexRouter(private val context: Context) {
             return executor.executeCommand("[CMD: $customAction]")
         }
 
-        // 1. THE HELP MENU
+        // 1. THE NEW DYNAMIC LEARN COMMAND
+        if (input.startsWith("learn ")) {
+            val payload = input.removePrefix("learn ").trim()
+            val parts = payload.split(">").map { it.trim() }
+            if (parts.size >= 2) {
+                return addMemory(parts[0], parts[1])
+            }
+            return "> [!] LEARN SYNTAX ERROR: Use 'learn [phrase] > [action/response]'"
+        }
+
+        // 2. THE HELP MENU
         if (input == "help") {
             return """
                 *** DEVILKING OS COMMAND REGISTRY ***
                 > settings      : Launch Macro Interface
-                > flashlight    : Toggles device flash
+                > learn [p]>[r] : Teach the OS a new reflex
                 > open [app]    : Launches application
                 > call [name]   : Initiates cellular override
                 
@@ -33,31 +44,16 @@ class RegexRouter(private val context: Context) {
                 > scan screen   : Dumps UI Matrix coordinates
                 > scroll        : Phantom Finger swiping
                 > snipe [text]  : Physically clicks UI
-                > type [UI]>[t] : Ghost Typing text
+                > type [t]      : Ghost Typing text
                 > macro whatsapp > [Name] > [Msg]
             """.trimIndent()
         }
 
+        // Initialize default memory internally
         if (input == "matrix.init") {
             val defaultJson = """[{"exact_variations": ["who am i"], "answer": "You are the Architect."}]"""
             File(context.filesDir, "memory.json").writeText(defaultJson)
-            return "> [SYSTEM]: memory.json constructed."
-        }
-        if (input == "matrix.export") {
-            return try {
-                val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
-                if (!vaultDir.exists()) vaultDir.mkdirs()
-                File(context.filesDir, "memory.json").copyTo(File(vaultDir, "memory.json"), overwrite = true)
-                "> [SYSTEM]: Matrix exported to Vault."
-            } catch (e: Exception) { "> [!] EXPORT ERROR: ${e.message}" }
-        }
-        if (input == "matrix.import") {
-            return try {
-                val importFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT/memory.json")
-                if (!importFile.exists()) return "> [!] IMPORT ERROR: Not found."
-                importFile.copyTo(File(context.filesDir, "memory.json"), overwrite = true)
-                "> [SYSTEM]: Matrix imported from Vault."
-            } catch (e: Exception) { "> [!] IMPORT ERROR: ${e.message}" }
+            return "> [SYSTEM]: Internal matrix initialized."
         }
 
         val memoryResult = checkMemoryMatrix(input)
@@ -65,10 +61,7 @@ class RegexRouter(private val context: Context) {
 
         // FAST PATHS
         if (input == "settings") return executor.executeCommand("[CMD: settings]")
-        
-        // THE MISSING LINK: Routing the scanner to the Executor
         if (input == "scan screen") return executor.executeCommand("[CMD: scan screen]") 
-        
         if (input == "flashlight" || input == "lumos") return executor.executeCommand("[CMD: flashlight]")
         if (input.startsWith("open ")) return executor.executeCommand("[CMD: open ${input.removePrefix("open ").trim()}]")
         if (input.startsWith("call ")) return executor.executeCommand("[CMD: call ${input.removePrefix("call ").trim()}]")
@@ -78,6 +71,25 @@ class RegexRouter(private val context: Context) {
         if (input.startsWith("macro ")) return executor.executeCommand("[CMD: $input]")
 
         return null 
+    }
+
+    private fun addMemory(trigger: String, response: String): String {
+        return try {
+            val memoryFile = File(context.filesDir, "memory.json")
+            val jsonArray = if (memoryFile.exists()) JSONArray(memoryFile.readText()) else JSONArray()
+            
+            val newItem = JSONObject()
+            val exacts = JSONArray()
+            exacts.put(trigger.lowercase())
+            newItem.put("exact_variations", exacts)
+            newItem.put("answer", response)
+            
+            jsonArray.put(newItem)
+            memoryFile.writeText(jsonArray.toString())
+            "> [SYSTEM]: Memory updated. I have learned to respond to '$trigger'."
+        } catch (e: Exception) {
+            "> [!] MEMORY ERROR: ${e.message}"
+        }
     }
 
     private fun checkMemoryMatrix(input: String): String? {
