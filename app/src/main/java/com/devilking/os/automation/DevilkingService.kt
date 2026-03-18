@@ -101,33 +101,36 @@ class DevilkingService : AccessibilityService() {
         Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
-    // --- TIER 6: THE NATIVE MATRIX DUMPER ---
+    // --- TIER 6: THE MATRIX DUMPER (UPGRADED FOR INVISIBLE FILTERING) ---
     fun dumpScreenMatrix(): String {
         val sb = StringBuilder()
         sb.append("\n--- ACTIVE SCREEN MATRIX ---\n")
         var counter = 1
 
         fun scanNode(node: AccessibilityNodeInfo) {
-            val text = node.text?.toString() ?: ""
-            val desc = node.contentDescription?.toString() ?: ""
-            val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                node.hintText?.toString() ?: ""
-            } else ""
-            
-            val uiType = node.className?.toString()?.split(".")?.last() ?: "UI Element"
-
-            if (text.isNotEmpty() || desc.isNotEmpty() || hint.isNotEmpty() || node.isClickable || node.isEditable) {
-                val rect = Rect()
-                node.getBoundsInScreen(rect)
+            // THE FIX: Ignore off-screen, hidden, or background ghost elements
+            if (node.isVisibleToUser) {
+                val text = node.text?.toString() ?: ""
+                val desc = node.contentDescription?.toString() ?: ""
+                val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    node.hintText?.toString() ?: ""
+                } else ""
                 
-                var label = text
-                if (label.isEmpty()) label = hint
-                if (label.isEmpty()) label = desc
-                if (label.isEmpty() && node.isClickable) label = "Unnamed Button"
+                val uiType = node.className?.toString()?.split(".")?.last() ?: "UI Element"
 
-                if (label.isNotEmpty() && rect.width() > 0 && rect.height() > 0) {
-                    sb.append("[$counter] $uiType: '$label' (Center X: ${rect.centerX()}, Y: ${rect.centerY()})\n")
-                    counter++
+                if (text.isNotEmpty() || desc.isNotEmpty() || hint.isNotEmpty() || node.isClickable || node.isEditable) {
+                    val rect = Rect()
+                    node.getBoundsInScreen(rect)
+                    
+                    var label = text
+                    if (label.isEmpty()) label = hint
+                    if (label.isEmpty()) label = desc
+                    if (label.isEmpty() && node.isClickable) label = "Unnamed Button"
+
+                    if (label.isNotEmpty() && rect.width() > 0 && rect.height() > 0) {
+                        sb.append("[$counter] $uiType: '$label' (Center X: ${rect.centerX()}, Y: ${rect.centerY()})\n")
+                        counter++
+                    }
                 }
             }
 
@@ -151,17 +154,21 @@ class DevilkingService : AccessibilityService() {
         var bestNode: AccessibilityNodeInfo? = null
 
         fun scanNodesForSniper(node: AccessibilityNodeInfo) {
-            val text = node.text?.toString()?.lowercase() ?: ""
-            val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
-            val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                node.hintText?.toString()?.lowercase() ?: ""
-            } else ""
+            // THE FIX: Only look at visible elements
+            if (node.isVisibleToUser) {
+                val text = node.text?.toString()?.lowercase() ?: ""
+                val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
+                val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    node.hintText?.toString()?.lowercase() ?: ""
+                } else ""
 
-            if (text.startsWith("root@devilking:~") || text.startsWith("> [")) {
-                // Skip terminal logs
-            } else if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
-                if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
-                    bestNode = node
+                // THE FIX: Ignore terminal logs AND the new Matrix Dump output
+                if (text.startsWith("root@devilking:~") || text.startsWith("> [") || text.contains("--- active screen matrix ---")) {
+                    // Skip
+                } else if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
+                    if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
+                        bestNode = node
+                    }
                 }
             }
 
@@ -190,7 +197,8 @@ class DevilkingService : AccessibilityService() {
 
         fun findEditable(node: AccessibilityNodeInfo) {
             if (targetNode != null) return
-            if (node.isEditable || node.className?.toString()?.contains("EditText") == true) {
+            // THE FIX: Must be visible to be injected
+            if (node.isVisibleToUser && (node.isEditable || node.className?.toString()?.contains("EditText") == true)) {
                 targetNode = node
                 return
             }
