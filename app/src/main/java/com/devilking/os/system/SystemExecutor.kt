@@ -13,7 +13,6 @@ class SystemExecutor(private val context: Context) {
     fun executeCommand(commandString: String): String {
         val cmd = commandString.removePrefix("[CMD: ").removeSuffix("]").trim()
 
-        // 1. AEGIS FIREWALL (Whitelist upgraded to allow 2x)
         val isSafe = cmd.startsWith("flashlight") ||
                      cmd.startsWith("open ") ||
                      cmd.startsWith("call ") ||
@@ -21,56 +20,49 @@ class SystemExecutor(private val context: Context) {
                      cmd.startsWith("2x ") || 
                      cmd.startsWith("snipe ") ||
                      cmd.startsWith("type ") ||
-                     cmd.startsWith("macro ")
+                     cmd.startsWith("macro ") ||
+                     cmd == "settings"
 
         if (!isSafe) {
             return "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($cmd)."
         }
 
-        // TIER 1: HARDWARE CONTROLS
+        // TIER 0: SETTINGS MATRIX LAUNCHER
+        if (cmd == "settings") {
+            val intent = Intent(context, com.devilking.os.terminal.SettingsActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return "> [SYSTEM]: Initializing Neural Settings Matrix..."
+        }
+
         if (cmd == "flashlight") return toggleFlashlight()
         if (cmd.startsWith("call ")) return initiateCall(cmd.removePrefix("call ").trim())
         if (cmd.startsWith("open ")) return launchApp(cmd.removePrefix("open ").trim())
 
-        // TIER 4: GOD MODE RELAYS (Accessibility)
         val godMode = com.devilking.os.automation.DevilkingService.instance
             ?: return "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
 
-        if (cmd == "scroll" || cmd == "scroll up") {
-            godMode.performSwipeUp(); return "> [SYSTEM]: Phantom Finger - Swiping Up."
-        }
-        if (cmd == "scroll down") {
-            godMode.performSwipeDown(); return "> [SYSTEM]: Phantom Finger - Swiping Down."
-        }
-        if (cmd == "2x scroll" || cmd == "2x scroll up") {
-            godMode.performDoubleSwipeUp(); return "> [SYSTEM]: Phantom Finger - Double Swiping Up."
-        }
-        if (cmd == "2x scroll down" || cmd == "2xscroll down") {
-            godMode.performDoubleSwipeDown(); return "> [SYSTEM]: Phantom Finger - Double Swiping Down."
-        }
+        if (cmd == "scroll" || cmd == "scroll up") { godMode.performSwipeUp(); return "> [SYSTEM]: Swiping Up." }
+        if (cmd == "scroll down") { godMode.performSwipeDown(); return "> [SYSTEM]: Swiping Down." }
+        if (cmd == "2x scroll" || cmd == "2x scroll up") { godMode.performDoubleSwipeUp(); return "> [SYSTEM]: Double Swiping Up." }
+        if (cmd == "2x scroll down" || cmd == "2xscroll down") { godMode.performDoubleSwipeDown(); return "> [SYSTEM]: Double Swiping Down." }
 
-        // MACRO ENGINE
         if (cmd.startsWith("macro whatsapp")) {
             val payload = cmd.removePrefix("macro whatsapp").trim().removePrefix(">").trim()
             val parts = payload.split(">").map { it.trim() }
             if (parts.size >= 2) {
                 godMode.executeWhatsAppMacro(parts[0], parts[1])
                 return "> [SYSTEM]: Executing WhatsApp Macro for ${parts[0]}..."
-            } else {
-                return "> [!] MACRO SYNTAX ERROR: Use 'macro whatsapp > Name > Message'"
             }
+            return "> [!] MACRO SYNTAX ERROR."
         }
 
-        // LETHAL SNIPER
         if (cmd.startsWith("snipe ")) {
-            val target = cmd.removePrefix("snipe ").trim()
-            val cleanTarget = target.replace("[", "").replace("]", "").trim()
-            val success = godMode.executeSniperStrike(cleanTarget)
-            return if (success) "> [SYSTEM]: Sniper Strike confirmed on '$cleanTarget'."
-                   else "> [!] SNIPER ERROR: Target '$cleanTarget' not found on screen."
+            val target = cmd.removePrefix("snipe ").trim().replace("[", "").replace("]", "").trim()
+            val success = godMode.executeSniperStrike(target)
+            return if (success) "> [SYSTEM]: Sniper Strike confirmed on '$target'." else "> [!] SNIPER ERROR: Target '$target' not found."
         }
 
-        // GHOST TYPING
         if (cmd.startsWith("type ")) {
             val payload = cmd.removePrefix("type ").trim()
             val parts = payload.split(">").map { it.trim() }
@@ -78,22 +70,18 @@ class SystemExecutor(private val context: Context) {
                 val success = godMode.executeGhostType(parts[0], parts[1])
                 return if (success) "> [SYSTEM]: Ghost Typed into '${parts[0]}'." else "> [!] TYPE ERROR: Target field not found."
             }
-            return "> [!] TYPE SYNTAX ERROR: Use 'type [UI Target] > [Text]'"
         }
 
-        return "> [!] EXECUTOR ERROR: Command bypassed Aegis but lacks execution logic."
+        return "> [!] EXECUTOR ERROR."
     }
 
     private fun toggleFlashlight(): String {
         return try {
             val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList[0]
             isFlashlightOn = !isFlashlightOn
-            cameraManager.setTorchMode(cameraId, isFlashlightOn)
+            cameraManager.setTorchMode(cameraManager.cameraIdList[0], isFlashlightOn)
             if (isFlashlightOn) "> [SYSTEM]: Flashlight Engaged." else "> [SYSTEM]: Flashlight Disabled."
-        } catch (e: Exception) {
-            "> [!] HARDWARE ERROR: Flashlight module unavailable."
-        }
+        } catch (e: Exception) { "> [!] HARDWARE ERROR: Flashlight module unavailable." }
     }
 
     private fun launchApp(appName: String): String {
@@ -111,14 +99,13 @@ class SystemExecutor(private val context: Context) {
                 }
             }
         }
-        return "> [!] ERROR: Application '$appName' not found or is restricted by Aegis."
+        return "> [!] ERROR: Application '$appName' not found."
     }
 
     private fun initiateCall(contactName: String): String {
         return try {
             val uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_FILTER_URI, Uri.encode(contactName))
             val cursor = context.contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME, ContactsContract.Contacts.HAS_PHONE_NUMBER), null, null, null)
-            
             var phoneNum: String? = null
             if (cursor != null && cursor.moveToFirst()) {
                 val hasPhone = cursor.getInt(cursor.getColumnIndexOrThrow(ContactsContract.Contacts.HAS_PHONE_NUMBER))
@@ -132,18 +119,13 @@ class SystemExecutor(private val context: Context) {
                 }
                 cursor.close()
             }
-
             if (phoneNum != null) {
                 val callIntent = Intent(Intent.ACTION_CALL)
                 callIntent.data = Uri.parse("tel:$phoneNum")
                 callIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(callIntent)
-                "> [SYSTEM]: Initiating cellular override. Calling $contactName..."
-            } else {
-                "> [!] TELEPHONY ERROR: Contact '$contactName' not found or has no number."
-            }
-        } catch (e: Exception) {
-            "> [!] PERMISSION ERROR: Call failed. Grant Contacts and Phone permissions."
-        }
+                "> [SYSTEM]: Calling $contactName..."
+            } else { "> [!] TELEPHONY ERROR: Contact not found." }
+        } catch (e: Exception) { "> [!] PERMISSION ERROR: Call failed." }
     }
 }
