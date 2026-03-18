@@ -36,6 +36,13 @@ class MainActivity : AppCompatActivity() {
     // VOICE RECOGNIZER
     private lateinit var speechRecognizer: SpeechRecognizer
 
+    // THE HARDWARE HIJACK RECEIVER (Volume Button Integration)
+    private val hardwareHijackReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            checkAudioPermissionAndListen()
+        }
+    }
+
     // THE FILE PICKER FOR CORE INJECTION
     private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -65,8 +72,16 @@ class MainActivity : AppCompatActivity() {
         setupVoiceAgent()
         setupKeyboardTraps()
 
+        // REGISTER THE HARDWARE HIJACK LISTENER
+        val filter = android.content.IntentFilter("com.devilking.os.WAKE_WORD_TRIGGERED")
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(hardwareHijackReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(hardwareHijackReceiver, filter)
+        }
+
         commandHistory.add("DEVILKING OS [Version 1.0.0]")
-        commandHistory.add("> Audio Matrix: Offline. Tap [MIC] to engage.")
+        commandHistory.add("> Audio Matrix: Offline. Tap [MIC] or HOLD VOL DOWN to engage.")
         commandHistory.add(aiCore.checkCoreStatus())
         adapter.notifyDataSetChanged()
 
@@ -247,6 +262,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         speechRecognizer.destroy()
+        unregisterReceiver(hardwareHijackReceiver)
         uiScope.cancel()
     }
 }
