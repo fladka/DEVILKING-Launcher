@@ -16,7 +16,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.*
-import kotlin.coroutines.resume // <-- THE FIX: Kotlin Extension Import
+import kotlin.coroutines.resume
 
 class DevilkingService : AccessibilityService() {
 
