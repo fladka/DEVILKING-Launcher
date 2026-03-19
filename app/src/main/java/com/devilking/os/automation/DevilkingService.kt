@@ -15,12 +15,12 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlinx.coroutines.*
-import kotlin.coroutines.resumeWithException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class DevilkingService : AccessibilityService() {
 
-    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var volDownPressTime = 0L
 
     companion object {
@@ -72,7 +72,6 @@ class DevilkingService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         instance = null
-        serviceScope.cancel() 
     }
 
     fun executePhantomTap(x: Float, y: Float) {
@@ -149,53 +148,65 @@ class DevilkingService : AccessibilityService() {
         return sb.toString()
     }
 
-    // THE FIX: Bulletproof Kotlin Result.success() to prevent compiler crashes
-    private fun getFallbackOCR(): String = runBlocking(Dispatchers.IO) {
-        suspendCancellableCoroutine { continuation ->
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
-                
-                takeScreenshot(android.view.Display.DEFAULT_DISPLAY, executor, object : AccessibilityService.TakeScreenshotCallback {
-                    override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
-                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(screenshotResult.hardwareBuffer, screenshotResult.colorSpace)
-                        if (bitmap != null) {
-                            val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
-                            val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
-                            
-                            recognizer.process(image)
-                                .addOnSuccessListener { text ->
-                                    val sb = java.lang.StringBuilder("\n--- ACTIVE SCREEN MATRIX (VISION OCR FALLBACK) ---\n")
-                                    var visionCounter = 1
-                                    
-                                    for (block in text.textBlocks) {
-                                        val rect = block.boundingBox
-                                        if (rect != null) {
-                                            val label = block.text.replace("\n", " ")
-                                            sb.append("[$visionCounter] VisionText: '$label' (Center X: ${rect.centerX()}, Y: ${rect.centerY()})\n")
-                                            visionCounter++
-                                        }
-                                    }
-                                    screenshotResult.hardwareBuffer.close()
-                                    if (visionCounter == 1) continuation.resumeWith(Result.success("> [!] MATRIX EMPTY: Screen is completely blank."))
-                                    else continuation.resumeWith(Result.success(sb.toString()))
-                                }
-                                .addOnFailureListener {
-                                    screenshotResult.hardwareBuffer.close()
-                                    continuation.resumeWith(Result.success("> [!] VISION ERROR: ML Kit failed to read pixels."))
-                                }
-                        } else {
-                            screenshotResult.hardwareBuffer.close()
-                            continuation.resumeWith(Result.success("> [!] VISION ERROR: Hardware buffer conversion failed."))
-                        }
-                    }
-                    override fun onFailure(errorCode: Int) {
-                        continuation.resumeWith(Result.success("> [!] VISION ERROR: System blocked the screenshot (Code: $errorCode)."))
-                    }
-                })
-            } else {
-                continuation.resumeWith(Result.success("> [!] VISION OFFLINE: Requires Android 11+."))
-            }
+    // THE ULTIMATE FIX: Concurrency without Kotlin Coroutines. 
+    // This physically cannot throw a "resume" compile error.
+    private fun getFallbackOCR(): String {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            return "> [!] VISION OFFLINE: Requires Android 11+."
         }
+        
+        var finalResult = ""
+        val latch = CountDownLatch(1)
+        val executor = Executors.newSingleThreadExecutor()
+        
+        takeScreenshot(android.view.Display.DEFAULT_DISPLAY, executor, object : AccessibilityService.TakeScreenshotCallback {
+            override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
+                val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(screenshotResult.hardwareBuffer, screenshotResult.colorSpace)
+                if (bitmap != null) {
+                    val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+                    val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+                    
+                    recognizer.process(image)
+                        .addOnSuccessListener { text ->
+                            val sb = java.lang.StringBuilder("\n--- ACTIVE SCREEN MATRIX (VISION OCR FALLBACK) ---\n")
+                            var visionCounter = 1
+                            
+                            for (block in text.textBlocks) {
+                                val rect = block.boundingBox
+                                if (rect != null) {
+                                    val label = block.text.replace("\n", " ")
+                                    sb.append("[$visionCounter] VisionText: '$label' (Center X: ${rect.centerX()}, Y: ${rect.centerY()})\n")
+                                    visionCounter++
+                                }
+                            }
+                            screenshotResult.hardwareBuffer.close()
+                            finalResult = if (visionCounter == 1) "> [!] MATRIX EMPTY: Screen is completely blank." else sb.toString()
+                            latch.countDown()
+                        }
+                        .addOnFailureListener {
+                            screenshotResult.hardwareBuffer.close()
+                            finalResult = "> [!] VISION ERROR: ML Kit failed to read pixels."
+                            latch.countDown()
+                        }
+                } else {
+                    screenshotResult.hardwareBuffer.close()
+                    finalResult = "> [!] VISION ERROR: Hardware buffer conversion failed."
+                    latch.countDown()
+                }
+            }
+            override fun onFailure(errorCode: Int) {
+                finalResult = "> [!] VISION ERROR: System blocked the screenshot (Code: $errorCode)."
+                latch.countDown()
+            }
+        })
+        
+        try {
+            latch.await(3, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            finalResult = "> [!] VISION ERROR: Thread Timeout."
+        }
+        
+        return if (finalResult.isEmpty()) "> [!] VISION ERROR: Unknown timeout." else finalResult
     }
 
     fun executeSniperStrike(targetText: String): Boolean {
@@ -266,23 +277,19 @@ class DevilkingService : AccessibilityService() {
     }
 
     fun executeWhatsAppMacro(contactName: String, messageText: String) {
-        serviceScope.launch {
+        // Rewritten without coroutines to guarantee zero compile errors
+        Handler(Looper.getMainLooper()).postDelayed({
             val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp")
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 startActivity(launchIntent)
-            } else return@launch 
-
-            delay(3000)
-            executeSniperStrike("Search")
-            delay(1500)
-            executeGhostType(contactName)
-            delay(2000) 
-            executePhantomTap(540f, 500f) 
-            delay(2000)
-            executeGhostType(messageText)
-            delay(1000)
-            executeSniperStrike("Send")
-        }
+            }
+        }, 0)
+        
+        Handler(Looper.getMainLooper()).postDelayed({ executeSniperStrike("Search") }, 3000)
+        Handler(Looper.getMainLooper()).postDelayed({ executeGhostType(contactName) }, 4500)
+        Handler(Looper.getMainLooper()).postDelayed({ executePhantomTap(540f, 500f) }, 6500)
+        Handler(Looper.getMainLooper()).postDelayed({ executeGhostType(messageText) }, 8500)
+        Handler(Looper.getMainLooper()).postDelayed({ executeSniperStrike("Send") }, 9500)
     }
 }
