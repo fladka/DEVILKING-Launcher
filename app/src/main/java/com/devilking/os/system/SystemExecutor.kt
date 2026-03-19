@@ -1,10 +1,13 @@
 package com.devilking.os.system
 
+import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraManager
+import android.media.AudioManager
 import android.net.Uri
 import android.provider.ContactsContract
+import com.devilking.os.automation.DevilkingService
 
 class SystemExecutor(private val context: Context) {
 
@@ -13,7 +16,7 @@ class SystemExecutor(private val context: Context) {
     fun executeCommand(commandString: String): String {
         val cmd = commandString.removePrefix("[CMD: ").removeSuffix("]").trim()
 
-        // 1. AEGIS FIREWALL WHITELIST
+        // 1. AEGIS FIREWALL WHITELIST (UPGRADED)
         val isSafe = cmd.startsWith("flashlight") ||
                      cmd.startsWith("open ") ||
                      cmd.startsWith("call ") ||
@@ -23,7 +26,13 @@ class SystemExecutor(private val context: Context) {
                      cmd.startsWith("type ") ||
                      cmd.startsWith("macro ") ||
                      cmd == "settings" ||
-                     cmd == "scan screen" // NEW: Tier 6 UI Scanner
+                     cmd == "scan screen" ||
+                     cmd == "clear" ||
+                     cmd == "home" ||
+                     cmd == "recents" ||
+                     cmd == "lock" ||
+                     cmd == "volume up" ||
+                     cmd == "volume down"
 
         if (!isSafe) {
             return "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($cmd)."
@@ -42,14 +51,44 @@ class SystemExecutor(private val context: Context) {
         if (cmd.startsWith("call ")) return initiateCall(cmd.removePrefix("call ").trim())
         if (cmd.startsWith("open ")) return launchApp(cmd.removePrefix("open ").trim())
 
-        // TIER 4/6: GOD MODE RELAYS (Accessibility)
-        val godMode = com.devilking.os.automation.DevilkingService.instance
+        // NEW: VOLUME CONTROLS
+        if (cmd == "volume up" || cmd == "volume down") {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (cmd == "volume up") {
+                audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                return "> [SYSTEM]: Volume Increased."
+            } else {
+                audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                return "> [SYSTEM]: Volume Decreased."
+            }
+        }
+
+        // TERMINAL CONTROL
+        if (cmd == "clear") {
+            return "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n> [SYSTEM]: Terminal wiped clean."
+        }
+
+        // TIER 4/6/7: GOD MODE RELAYS (Accessibility)
+        val godMode = DevilkingService.instance
             ?: return "> [!] GOD MODE OFFLINE: Accessibility Service not bound."
 
-        // NEW TIER 6: UI MATRIX DUMP
+        // SYSTEM NAVIGATION
+        if (cmd == "home") {
+            godMode.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+            return "> [SYSTEM]: Returning to Home Screen."
+        }
+        if (cmd == "recents") {
+            godMode.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+            return "> [SYSTEM]: Opening Recent Apps."
+        }
+        if (cmd == "lock") {
+            godMode.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+            return "> [SYSTEM]: Device Locked."
+        }
+
+        // UI MATRIX DUMP
         if (cmd == "scan screen") {
-            val matrixDump = godMode.dumpScreenMatrix()
-            return matrixDump
+            return godMode.dumpScreenMatrix()
         }
 
         // PHANTOM GESTURES
