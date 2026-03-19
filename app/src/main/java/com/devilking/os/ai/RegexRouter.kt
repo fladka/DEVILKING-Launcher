@@ -63,10 +63,119 @@ class RegexRouter(private val context: Context) {
             """.trimIndent()
         }
 
+        // --- THE MAXIMIZED MASTER VAULT ---
         if (input == "matrix.init") {
-            val defaultJson = """[{"exact_variations": ["who am i"], "answer": "You are the Architect."}]"""
-            File(context.filesDir, "memory.json").writeText(defaultJson)
-            return "> [SYSTEM]: Internal matrix initialized."
+            val masterJson = """
+                [
+                  {
+                    "exact_variations": ["who am i", "who is my creator"],
+                    "answer": "You are the Architect."
+                  },
+                  {
+                    "exact_variations": ["read my screen", "scan screen", "what is on the screen", "check screen", "look at screen", "screen dekho"],
+                    "answer": "[CMD: scan screen]"
+                  },
+                  {
+                    "exact_variations": ["scroll down", "go down", "swipe down", "page down", "niche karo", "aur niche"],
+                    "answer": "[CMD: scroll down]"
+                  },
+                  {
+                    "exact_variations": ["scroll up", "go up", "swipe up", "page up", "upar karo", "wapas upar"],
+                    "answer": "[CMD: scroll up]"
+                  },
+                  {
+                    "exact_variations": ["scroll fast", "2x scroll", "double swipe down", "tez niche karo"],
+                    "answer": "[CMD: 2x scroll down]"
+                  },
+                  {
+                    "exact_variations": ["turn on flashlight", "lumos", "torch on", "light on", "batti jalao", "flash on"],
+                    "answer": "[CMD: flashlight]"
+                  },
+                  {
+                    "exact_variations": ["clear terminal", "wipe screen", "clean screen", "clear", "saaf karo"],
+                    "answer": "[CMD: clear]"
+                  },
+                  {
+                    "exact_variations": ["open settings", "system settings", "macro interface", "settings kholo"],
+                    "answer": "[CMD: settings]"
+                  },
+                  {
+                    "exact_variations": ["help me", "show commands", "what can you do", "commands dikhao", "kya kar sakte ho"],
+                    "answer": "[CMD: help]"
+                  },
+                  {
+                    "exact_variations": ["go home", "home screen", "main screen", "home pe jao", "back to home"],
+                    "answer": "[CMD: home]"
+                  },
+                  {
+                    "exact_variations": ["recent apps", "show recents", "background apps", "recent kholo"],
+                    "answer": "[CMD: recents]"
+                  },
+                  {
+                    "exact_variations": ["lock phone", "screen off", "display off", "phone band karo", "lock it"],
+                    "answer": "[CMD: lock]"
+                  },
+                  {
+                    "exact_variations": ["volume up", "increase volume", "awaaz badao", "louder", "make it loud"],
+                    "answer": "[CMD: volume up]"
+                  },
+                  {
+                    "exact_variations": ["volume down", "decrease volume", "awaaz kam karo", "quieter", "make it quiet"],
+                    "answer": "[CMD: volume down]"
+                  },
+                  {
+                    "exact_variations": ["open whatsapp", "whatsapp kholo", "launch whatsapp", "start whatsapp"],
+                    "answer": "[CMD: open whatsapp]"
+                  },
+                  {
+                    "exact_variations": ["open youtube", "youtube kholo", "launch youtube", "play youtube"],
+                    "answer": "[CMD: open youtube]"
+                  },
+                  {
+                    "exact_variations": ["open camera", "camera kholo", "take a picture", "photo khicho"],
+                    "answer": "[CMD: open camera]"
+                  },
+                  {
+                    "exact_variations": ["play music", "gana bajao", "open spotify", "spotify kholo", "music chalu karo"],
+                    "answer": "[CMD: open spotify]"
+                  },
+                  {
+                    "exact_variations": ["click search", "tap search", "snipe search", "search pe click karo", "khojo"],
+                    "answer": "[CMD: snipe search]"
+                  },
+                  {
+                    "exact_variations": ["click send", "tap send", "snipe send", "bhej do", "send pe click karo"],
+                    "answer": "[CMD: snipe send]"
+                  },
+                  {
+                    "exact_variations": ["click back", "go back", "snipe back", "peeche jao", "wapas jao"],
+                    "answer": "[CMD: snipe back]"
+                  },
+                  {
+                    "exact_variations": ["click play", "play video", "snipe play", "chalu karo", "play karo"],
+                    "answer": "[CMD: snipe play]"
+                  },
+                  {
+                    "exact_variations": ["click pause", "stop video", "snipe pause", "roko", "pause karo"],
+                    "answer": "[CMD: snipe pause]"
+                  },
+                  {
+                    "exact_variations": ["click cancel", "tap cancel", "snipe cancel", "hatao", "cancel karo"],
+                    "answer": "[CMD: snipe cancel]"
+                  },
+                  {
+                    "exact_variations": ["click ok", "tap ok", "snipe ok", "theek hai", "confirm karo"],
+                    "answer": "[CMD: snipe ok]"
+                  },
+                  {
+                    "exact_variations": ["click profile", "open profile", "snipe profile", "meri profile", "account kholo"],
+                    "answer": "[CMD: snipe profile]"
+                  }
+                ]
+            """.trimIndent()
+            
+            File(context.filesDir, "memory.json").writeText(masterJson)
+            return "> [SYSTEM]: Maximized Master matrix initialized. 26 core reflexes armed."
         }
 
         // --- COMMAND PARSERS ---
