@@ -84,22 +84,33 @@ class DevilkingService : AccessibilityService() {
         serviceScope.cancel() 
     }
 
+    // --- PHANTOM HANDS (RESTORED DOUBLE SWIPES) ---
     fun executePhantomTap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
+        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0L, 50L)).build()
         dispatchGesture(gesture, null, null)
     }
 
     fun performSwipeUp() {
         val path = Path().apply { moveTo(500f, 1500f); lineTo(500f, 500f) }
-        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 500)).build()
+        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0L, 500L)).build()
         dispatchGesture(gesture, null, null)
     }
 
     fun performSwipeDown() {
         val path = Path().apply { moveTo(500f, 500f); lineTo(500f, 1500f) }
-        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 500)).build()
+        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0L, 500L)).build()
         dispatchGesture(gesture, null, null)
+    }
+
+    fun performDoubleSwipeUp() {
+        performSwipeUp()
+        Handler(Looper.getMainLooper()).postDelayed({ performSwipeUp() }, 600)
+    }
+
+    fun performDoubleSwipeDown() {
+        performSwipeDown()
+        Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
     // --- TIER 7: THE HYBRID EYE MATRIX DUMPER ---
