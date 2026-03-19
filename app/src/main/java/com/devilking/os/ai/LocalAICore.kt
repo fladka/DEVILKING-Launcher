@@ -61,8 +61,7 @@ class LocalAICore(private val context: Context) {
         return try {
             val vaultData = vaultManager.injectContext()
             
-            // THE FIX: TACTICAL MATRIX COMPRESSION
-            // We prevent the JNI engine from exploding by strictly limiting the UI dump size.
+            // TACTICAL MATRIX COMPRESSION (Prevents RAM overload)
             val rawMatrix = DevilkingService.instance?.dumpScreenMatrix() ?: "Hidden."
             val matrixLines = rawMatrix.split("\n")
             val safeMatrix = if (matrixLines.size > 12) {
@@ -71,7 +70,7 @@ class LocalAICore(private val context: Context) {
                 rawMatrix
             }
 
-            // Condensed System Prompt to save context size
+            // Condensed System Prompt
             val systemPrompt = """
                 You are DEVILKING OS. NO chatting. Output 1 execution command in brackets.
                 Cmds: [CMD: snipe <name>], [CMD: type <text>], [CMD: scroll down], [CMD: open <app>], [CMD: macro whatsapp > <name> > <msg>]
@@ -81,7 +80,7 @@ class LocalAICore(private val context: Context) {
 
             val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
             
-            // THE SHIELD: Hard limit the prompt length before it hits C++
+            // Hard limit prompt length to protect the 0.5B model context window
             val finalPrompt = if (formattedPrompt.length > 1800) formattedPrompt.substring(0, 1800) else formattedPrompt
 
             val rawAnswer = generateResponseFromJNI(finalPrompt)
