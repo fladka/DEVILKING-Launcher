@@ -21,8 +21,6 @@ import kotlin.coroutines.resume
 class DevilkingService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
-    
-    // NEW: We only track Volume Down now. Volume Up is ignored.
     private var volDownPressTime = 0L
 
     companion object {
@@ -39,8 +37,16 @@ class DevilkingService : AccessibilityService() {
         Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye Ready.")
     }
 
-    // THE FIX: Ultimate Volume Down Hijack (Leaves Volume Up Normal)
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        // THE TOGGLE: Check if Hijack is enabled in settings (Default is true)
+        val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
+        val isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
+
+        // If the kill-switch is flipped off, act like a normal phone.
+        if (!isHijackEnabled) {
+            return super.onKeyEvent(event) 
+        }
+
         // ONLY intercept Volume Down. Leave Volume Up and everything else normal.
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             if (event.action == KeyEvent.ACTION_DOWN) {
