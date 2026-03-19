@@ -47,11 +47,9 @@ class LocalAICore(private val context: Context) {
         
         if (lowerPrompt == "vault.reload") return vaultManager.loadVault()
 
-        // 1. FAST PATH ROUTER (Bypasses AI if it's a hardcoded reflex)
         val reflexAnswer = regexRouter.route(prompt)
         if (reflexAnswer != null) return reflexAnswer
 
-        // 2. CORE WAKE-UP
         if (!isModelLoaded) {
             val privateFile = File(context.filesDir, "brain.gguf")
             if (privateFile.exists() && privateFile.length() > 50 * 1024 * 1024) {
@@ -61,41 +59,34 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            // --- TIER 7: THE NEURAL BRIDGE ---
             val vaultData = vaultManager.injectContext()
             
-            // Silently rip the active screen state in 5 milliseconds
-            val screenMatrix = DevilkingService.instance?.dumpScreenMatrix() ?: "Screen hidden or offline."
+            // THE FIX: TACTICAL MATRIX COMPRESSION
+            // We prevent the JNI engine from exploding by strictly limiting the UI dump size.
+            val rawMatrix = DevilkingService.instance?.dumpScreenMatrix() ?: "Hidden."
+            val matrixLines = rawMatrix.split("\n")
+            val safeMatrix = if (matrixLines.size > 12) {
+                matrixLines.take(12).joinToString("\n") + "\n[Truncated to save RAM]"
+            } else {
+                rawMatrix
+            }
 
-            // The Master System Prompt (Brainwashing the 0.5B model)
+            // Condensed System Prompt to save context size
             val systemPrompt = """
-                You are DEVILKING OS, a cybernetic Android agent. 
-                You NEVER converse. You NEVER explain your thoughts. DO NOT use <think> tags.
-                You ONLY output execution commands in brackets.
-                
-                Your available commands:
-                [CMD: snipe <exact target name>] - Physically taps a UI button on screen.
-                [CMD: type <text>] - Injects text into the active search/message box.
-                [CMD: scroll down] / [CMD: scroll up] - Swipes the screen.
-                [CMD: open <app name>] - Launches an application.
-                [CMD: macro whatsapp > <name> > <message>] - Fully automates sending a WhatsApp message.
-                
-                Local Vault Knowledge:
-                $vaultData
-                
-                Active Screen Matrix (UI Elements currently visible to you):
-                $screenMatrix
-                
-                Analyze the user's intent. Read the Screen Matrix if necessary. Output the EXACT single command needed to execute the action.
+                You are DEVILKING OS. NO chatting. Output 1 execution command in brackets.
+                Cmds: [CMD: snipe <name>], [CMD: type <text>], [CMD: scroll down], [CMD: open <app>], [CMD: macro whatsapp > <name> > <msg>]
+                Screen:
+                $safeMatrix
             """.trimIndent()
 
             val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
             
-            // 3. AI INFERENCE
-            val rawAnswer = generateResponseFromJNI(formattedPrompt)
+            // THE SHIELD: Hard limit the prompt length before it hits C++
+            val finalPrompt = if (formattedPrompt.length > 1800) formattedPrompt.substring(0, 1800) else formattedPrompt
+
+            val rawAnswer = generateResponseFromJNI(finalPrompt)
             val cleanAnswer = rawAnswer.substringAfter("assistant\n").substringBefore("<|im_end|>").replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
             
-            // 4. THE NERVOUS SYSTEM INTERCEPTOR
             if (cleanAnswer.contains("[CMD:")) {
                 val systemExecutor = com.devilking.os.system.SystemExecutor(context)
                 return systemExecutor.executeCommand(cleanAnswer)
