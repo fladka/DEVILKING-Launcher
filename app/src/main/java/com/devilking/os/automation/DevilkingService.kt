@@ -21,8 +21,9 @@ import kotlin.coroutines.resume
 class DevilkingService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
-    private var volDownHandled = false
-    private var volUpHandled = false
+    
+    // NEW: We only track Volume Down now. Volume Up is ignored.
+    private var volDownPressTime = 0L
 
     companion object {
         var instance: DevilkingService? = null
@@ -38,47 +39,32 @@ class DevilkingService : AccessibilityService() {
         Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye Ready.")
     }
 
-    // THE FIX: Bulletproof Hardware Interception using RepeatCount
+    // THE FIX: Ultimate Volume Down Hijack (Leaves Volume Up Normal)
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
+        // ONLY intercept Volume Down. Leave Volume Up and everything else normal.
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.repeatCount == 0) {
-                    volDownHandled = false
-                } else if (event.repeatCount > 7 && !volDownHandled) { 
-                    // Held for approx 500ms
-                    sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
-                    volDownHandled = true
+                if (volDownPressTime == 0L) {
+                    volDownPressTime = System.currentTimeMillis()
                 }
-                return true
+                // RETURN TRUE: This kills the signal so Vivo OS doesn't show the volume slider!
+                return true 
             } else if (event.action == KeyEvent.ACTION_UP) {
-                if (!volDownHandled) {
+                val duration = System.currentTimeMillis() - volDownPressTime
+                volDownPressTime = 0L
+                
+                if (duration > 500) {
+                    // Long press detected: Trigger DEVILKING Mic
+                    sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
+                } else {
+                    // Short press detected: Manually lower volume since we blocked the system from doing it
+                    val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 }
-                volDownHandled = false
                 return true
             }
         }
-
-        if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.repeatCount == 0) {
-                    volUpHandled = false
-                } else if (event.repeatCount > 7 && !volUpHandled) {
-                    executePhantomTap(540f, 1200f)
-                    volUpHandled = true
-                }
-                return true
-            } else if (event.action == KeyEvent.ACTION_UP) {
-                if (!volUpHandled) {
-                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
-                }
-                volUpHandled = false
-                return true
-            }
-        }
-        return super.onKeyEvent(event)
+        return super.onKeyEvent(event) // Volume Up passes through normally
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
