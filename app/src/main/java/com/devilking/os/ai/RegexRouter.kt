@@ -11,7 +11,6 @@ class RegexRouter(private val context: Context) {
     
     private val executor = SystemExecutor(context)
 
-    // Levenshtein Distance Algorithm
     private fun calculateFuzzyDistance(lhs: CharSequence, rhs: CharSequence): Int {
         val lhsLength = lhs.length
         val rhsLength = rhs.length
@@ -38,11 +37,15 @@ class RegexRouter(private val context: Context) {
     fun route(prompt: String): String? {
         val input = prompt.lowercase().trim()
 
-        // --- RESTORED SYSTEM FAST PATHS ---
+        // --- FAST PATHS ---
         if (input == "clear") return executor.executeCommand("[CMD: clear]")
         if (input == "settings") return executor.executeCommand("[CMD: settings]")
         if (input == "scan screen") return executor.executeCommand("[CMD: scan screen]") 
         if (input == "flashlight" || input == "lumos") return executor.executeCommand("[CMD: flashlight]")
+        
+        // THE FIX: Route the Hijack Commands to the Executor
+        if (input == "hijack on") return executor.executeCommand("[CMD: hijack on]")
+        if (input == "hijack off") return executor.executeCommand("[CMD: hijack off]")
         
         if (input == "help") {
             return """
@@ -51,7 +54,8 @@ class RegexRouter(private val context: Context) {
                 > learn [p]>[r] : Teach the OS a new reflex
                 > matrix.init   : Reset memory matrix
                 > open [app]    : Launches application
-                > call [name]   : Initiates cellular override
+                > hijack off    : Disable Vol Button mic
+                > hijack on     : Enable Vol Button mic
                 > clear         : Wipes terminal history
                 
                 [ GOD MODE: SCREEN AUTOMATION ]
@@ -59,11 +63,9 @@ class RegexRouter(private val context: Context) {
                 > scroll        : Phantom Finger swiping
                 > snipe [text]  : Physically clicks UI
                 > type [t]      : Ghost Typing text
-                > macro whatsapp > [Name] > [Msg]
             """.trimIndent()
         }
 
-        // --- THE MAXIMIZED MASTER VAULT ---
         if (input == "matrix.init") {
             val masterJson = """
                 [
@@ -178,7 +180,6 @@ class RegexRouter(private val context: Context) {
             return "> [SYSTEM]: Maximized Master matrix initialized. 26 core reflexes armed."
         }
 
-        // --- COMMAND PARSERS ---
         if (input.startsWith("open ")) return executor.executeCommand("[CMD: open ${input.removePrefix("open ").trim()}]")
         if (input.startsWith("call ")) return executor.executeCommand("[CMD: call ${input.removePrefix("call ").trim()}]")
         if (input.startsWith("scroll") || input.startsWith("2x ")) return executor.executeCommand("[CMD: $input]")
@@ -195,7 +196,6 @@ class RegexRouter(private val context: Context) {
             return "> [!] LEARN SYNTAX ERROR: Use 'learn [phrase] > [action/response]'"
         }
 
-        // --- FUZZY LOGIC MEMORY MATCHER ---
         val memoryResult = checkMemoryMatrixFuzzy(input)
         if (memoryResult != null) {
             return if (memoryResult.uppercase().contains("[CMD:")) {
@@ -252,7 +252,6 @@ class RegexRouter(private val context: Context) {
                     
                     val distance = calculateFuzzyDistance(input, target)
                     
-                    // Dynamic tolerance: Longer words allow more typos.
                     val allowedTypos = when {
                         target.length <= 4 -> 1
                         target.length <= 8 -> 2
