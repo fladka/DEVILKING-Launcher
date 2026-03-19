@@ -16,7 +16,7 @@ class SystemExecutor(private val context: Context) {
     fun executeCommand(commandString: String): String {
         val cmd = commandString.removePrefix("[CMD: ").removeSuffix("]").trim()
 
-        // 1. AEGIS FIREWALL WHITELIST (UPGRADED)
+        // 1. AEGIS FIREWALL WHITELIST (UPGRADED WITH TOGGLES)
         val isSafe = cmd.startsWith("flashlight") ||
                      cmd.startsWith("open ") ||
                      cmd.startsWith("call ") ||
@@ -32,7 +32,9 @@ class SystemExecutor(private val context: Context) {
                      cmd == "recents" ||
                      cmd == "lock" ||
                      cmd == "volume up" ||
-                     cmd == "volume down"
+                     cmd == "volume down" ||
+                     cmd == "hijack on" ||
+                     cmd == "hijack off"
 
         if (!isSafe) {
             return "> [!] AEGIS FIREWALL: Unauthorized core command blocked ($cmd)."
@@ -46,12 +48,22 @@ class SystemExecutor(private val context: Context) {
             return "> [SYSTEM]: Initializing Neural Settings Matrix..."
         }
 
+        // --- NEW: HARDWARE KILL-SWITCHES ---
+        if (cmd == "hijack on") {
+            context.getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE).edit().putBoolean("vol_hijack_enabled", true).apply()
+            return "> [SYSTEM]: Hardware Volume Hijack ENGAGED."
+        }
+        if (cmd == "hijack off") {
+            context.getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE).edit().putBoolean("vol_hijack_enabled", false).apply()
+            return "> [SYSTEM]: Hardware Volume Hijack DISABLED. Normal volume restored."
+        }
+
         // TIER 1: HARDWARE CONTROLS
         if (cmd == "flashlight") return toggleFlashlight()
         if (cmd.startsWith("call ")) return initiateCall(cmd.removePrefix("call ").trim())
         if (cmd.startsWith("open ")) return launchApp(cmd.removePrefix("open ").trim())
 
-        // NEW: VOLUME CONTROLS
+        // VOLUME CONTROLS
         if (cmd == "volume up" || cmd == "volume down") {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (cmd == "volume up") {
