@@ -34,7 +34,7 @@ class DevilkingService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        Log.d("DEVILKING_SYS", "God Mode Online. Volume Control Restored.")
+        Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye Ready.")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -52,7 +52,6 @@ class DevilkingService : AccessibilityService() {
                 if (duration > 500) {
                     sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
                 } else {
-                    // THE FIX: Direct Volume Control via System Stream
                     audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 }
                 return true
@@ -69,7 +68,6 @@ class DevilkingService : AccessibilityService() {
                 if (duration > 500) {
                     executePhantomTap(540f, 1200f) 
                 } else {
-                    // THE FIX: Direct Volume Control via System Stream
                     audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                 }
                 return true
@@ -104,16 +102,7 @@ class DevilkingService : AccessibilityService() {
         dispatchGesture(gesture, null, null)
     }
 
-    fun performDoubleSwipeUp() {
-        performSwipeUp()
-        Handler(Looper.getMainLooper()).postDelayed({ performSwipeUp() }, 600)
-    }
-
-    fun performDoubleSwipeDown() {
-        performSwipeDown()
-        Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
-    }
-
+    // --- TIER 7: THE HYBRID EYE MATRIX DUMPER ---
     fun dumpScreenMatrix(): String {
         val sb = StringBuilder()
         sb.append("\n--- ACTIVE SCREEN MATRIX ---\n")
@@ -144,7 +133,6 @@ class DevilkingService : AccessibilityService() {
                     }
                 }
             }
-
             for (i in 0 until node.childCount) {
                 val child = node.getChild(i) ?: continue
                 scanNode(child)
@@ -155,8 +143,60 @@ class DevilkingService : AccessibilityService() {
             window.root?.let { scanNode(it) }
         }
 
-        if (counter == 1) return "> [!] MATRIX SCAN FAILED: Screen is hidden or empty."
+        // THE FALLBACK TRIGGER: If the XML tree is empty (Games/Secure apps), activate ML Kit
+        if (counter == 1) {
+            return getFallbackOCR()
+        }
         return sb.toString()
+    }
+
+    // --- THE VISION ENGINE (SILENT SCREENSHOT + ML KIT) ---
+    private fun getFallbackOCR(): String = runBlocking(Dispatchers.IO) {
+        suspendCancellableCoroutine { continuation ->
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+                
+                takeScreenshot(android.view.Display.DEFAULT_DISPLAY, executor, object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
+                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(screenshotResult.hardwareBuffer, screenshotResult.colorSpace)
+                        if (bitmap != null) {
+                            val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+                            val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+                            
+                            recognizer.process(image)
+                                .addOnSuccessListener { text ->
+                                    val sb = java.lang.StringBuilder("\n--- ACTIVE SCREEN MATRIX (VISION OCR FALLBACK) ---\n")
+                                    var visionCounter = 1
+                                    
+                                    for (block in text.textBlocks) {
+                                        val rect = block.boundingBox
+                                        if (rect != null) {
+                                            val label = block.text.replace("\n", " ")
+                                            sb.append("[$visionCounter] VisionText: '$label' (Center X: ${rect.centerX()}, Y: ${rect.centerY()})\n")
+                                            visionCounter++
+                                        }
+                                    }
+                                    screenshotResult.hardwareBuffer.close()
+                                    if (visionCounter == 1) continuation.resume("> [!] MATRIX EMPTY: Screen is completely blank.")
+                                    else continuation.resume(sb.toString())
+                                }
+                                .addOnFailureListener {
+                                    screenshotResult.hardwareBuffer.close()
+                                    continuation.resume("> [!] VISION ERROR: ML Kit failed to read pixels.")
+                                }
+                        } else {
+                            screenshotResult.hardwareBuffer.close()
+                            continuation.resume("> [!] VISION ERROR: Hardware buffer conversion failed.")
+                        }
+                    }
+                    override fun onFailure(errorCode: Int) {
+                        continuation.resume("> [!] VISION ERROR: System blocked the screenshot (Code: $errorCode).")
+                    }
+                })
+            } else {
+                continuation.resume("> [!] VISION OFFLINE: Requires Android 11+.")
+            }
+        }
     }
 
     fun executeSniperStrike(targetText: String): Boolean {
