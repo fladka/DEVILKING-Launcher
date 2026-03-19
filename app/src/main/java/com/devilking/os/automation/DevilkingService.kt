@@ -16,6 +16,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.*
+import kotlin.coroutines.resume // <-- THE FIX: Kotlin Extension Import
 
 class DevilkingService : AccessibilityService() {
 
@@ -84,7 +85,6 @@ class DevilkingService : AccessibilityService() {
         serviceScope.cancel() 
     }
 
-    // --- PHANTOM HANDS (RESTORED DOUBLE SWIPES) ---
     fun executePhantomTap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0L, 50L)).build()
@@ -113,7 +113,6 @@ class DevilkingService : AccessibilityService() {
         Handler(Looper.getMainLooper()).postDelayed({ performSwipeDown() }, 600)
     }
 
-    // --- TIER 7: THE HYBRID EYE MATRIX DUMPER ---
     fun dumpScreenMatrix(): String {
         val sb = StringBuilder()
         sb.append("\n--- ACTIVE SCREEN MATRIX ---\n")
@@ -154,14 +153,12 @@ class DevilkingService : AccessibilityService() {
             window.root?.let { scanNode(it) }
         }
 
-        // THE FALLBACK TRIGGER: If the XML tree is empty (Games/Secure apps), activate ML Kit
         if (counter == 1) {
             return getFallbackOCR()
         }
         return sb.toString()
     }
 
-    // --- THE VISION ENGINE (SILENT SCREENSHOT + ML KIT) ---
     private fun getFallbackOCR(): String = runBlocking(Dispatchers.IO) {
         suspendCancellableCoroutine { continuation ->
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
