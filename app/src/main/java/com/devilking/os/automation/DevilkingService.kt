@@ -16,7 +16,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.*
-import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class DevilkingService : AccessibilityService() {
 
@@ -38,39 +38,33 @@ class DevilkingService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        // THE TOGGLE: Check if Hijack is enabled in settings (Default is true)
         val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
         val isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
 
-        // If the kill-switch is flipped off, act like a normal phone.
         if (!isHijackEnabled) {
             return super.onKeyEvent(event) 
         }
 
-        // ONLY intercept Volume Down. Leave Volume Up and everything else normal.
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 if (volDownPressTime == 0L) {
                     volDownPressTime = System.currentTimeMillis()
                 }
-                // RETURN TRUE: This kills the signal so Vivo OS doesn't show the volume slider!
                 return true 
             } else if (event.action == KeyEvent.ACTION_UP) {
                 val duration = System.currentTimeMillis() - volDownPressTime
                 volDownPressTime = 0L
                 
                 if (duration > 500) {
-                    // Long press detected: Trigger DEVILKING Mic
                     sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
                 } else {
-                    // Short press detected: Manually lower volume since we blocked the system from doing it
                     val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 }
                 return true
             }
         }
-        return super.onKeyEvent(event) // Volume Up passes through normally
+        return super.onKeyEvent(event) 
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -155,6 +149,7 @@ class DevilkingService : AccessibilityService() {
         return sb.toString()
     }
 
+    // THE FIX: Bulletproof Kotlin Result.success() to prevent compiler crashes
     private fun getFallbackOCR(): String = runBlocking(Dispatchers.IO) {
         suspendCancellableCoroutine { continuation ->
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -181,24 +176,24 @@ class DevilkingService : AccessibilityService() {
                                         }
                                     }
                                     screenshotResult.hardwareBuffer.close()
-                                    if (visionCounter == 1) continuation.resume("> [!] MATRIX EMPTY: Screen is completely blank.")
-                                    else continuation.resume(sb.toString())
+                                    if (visionCounter == 1) continuation.resumeWith(Result.success("> [!] MATRIX EMPTY: Screen is completely blank."))
+                                    else continuation.resumeWith(Result.success(sb.toString()))
                                 }
                                 .addOnFailureListener {
                                     screenshotResult.hardwareBuffer.close()
-                                    continuation.resume("> [!] VISION ERROR: ML Kit failed to read pixels.")
+                                    continuation.resumeWith(Result.success("> [!] VISION ERROR: ML Kit failed to read pixels."))
                                 }
                         } else {
                             screenshotResult.hardwareBuffer.close()
-                            continuation.resume("> [!] VISION ERROR: Hardware buffer conversion failed.")
+                            continuation.resumeWith(Result.success("> [!] VISION ERROR: Hardware buffer conversion failed."))
                         }
                     }
                     override fun onFailure(errorCode: Int) {
-                        continuation.resume("> [!] VISION ERROR: System blocked the screenshot (Code: $errorCode).")
+                        continuation.resumeWith(Result.success("> [!] VISION ERROR: System blocked the screenshot (Code: $errorCode)."))
                     }
                 })
             } else {
-                continuation.resume("> [!] VISION OFFLINE: Requires Android 11+.")
+                continuation.resumeWith(Result.success("> [!] VISION OFFLINE: Requires Android 11+."))
             }
         }
     }
