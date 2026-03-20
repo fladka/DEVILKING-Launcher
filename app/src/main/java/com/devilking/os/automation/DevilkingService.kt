@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
 
 class DevilkingService : AccessibilityService() {
 
-    private var volDownPressTime = 0L
+    // THE FIX: State locks for the hardware clock
+    private var isMicTriggered = false
 
     companion object {
         var instance: DevilkingService? = null
@@ -37,6 +38,7 @@ class DevilkingService : AccessibilityService() {
         Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye Ready.")
     }
 
+    // THE VIVO BYPASS: Using native eventTime and downTime
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
         val isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
@@ -46,25 +48,34 @@ class DevilkingService : AccessibilityService() {
         }
 
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                if (volDownPressTime == 0L) {
-                    volDownPressTime = System.currentTimeMillis()
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    // Calculate exactly how long the physical hardware switch has been held closed
+                    val pressDuration = event.eventTime - event.downTime
+
+                    if (pressDuration > 500 && !isMicTriggered) {
+                        // Fire IMMEDIATELY while holding. Do not wait for ACTION_UP.
+                        sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
+                        isMicTriggered = true
+                    }
+                    return true // Consume the event so Vivo doesn't see it
                 }
-                return true 
-            } else if (event.action == KeyEvent.ACTION_UP) {
-                val duration = System.currentTimeMillis() - volDownPressTime
-                volDownPressTime = 0L
-                
-                if (duration > 500) {
-                    sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
-                } else {
-                    val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                KeyEvent.ACTION_UP -> {
+                    val pressDuration = event.eventTime - event.downTime
+                    
+                    if (!isMicTriggered && pressDuration < 500) {
+                        // It was a short, quick tap. Lower the volume manually.
+                        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                        audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                    }
+                    
+                    // Reset the lock for the next time you press the button
+                    isMicTriggered = false 
+                    return true // Consume the event
                 }
-                return true
             }
         }
-        return super.onKeyEvent(event) 
+        return super.onKeyEvent(event) // Let Volume Up pass normally
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -148,8 +159,6 @@ class DevilkingService : AccessibilityService() {
         return sb.toString()
     }
 
-    // THE ULTIMATE FIX: Concurrency without Kotlin Coroutines. 
-    // This physically cannot throw a "resume" compile error.
     private fun getFallbackOCR(): String {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
             return "> [!] VISION OFFLINE: Requires Android 11+."
@@ -277,7 +286,6 @@ class DevilkingService : AccessibilityService() {
     }
 
     fun executeWhatsAppMacro(contactName: String, messageText: String) {
-        // Rewritten without coroutines to guarantee zero compile errors
         Handler(Looper.getMainLooper()).postDelayed({
             val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp")
             if (launchIntent != null) {
