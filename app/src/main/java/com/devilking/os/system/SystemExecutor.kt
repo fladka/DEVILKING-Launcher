@@ -48,13 +48,15 @@ class SystemExecutor(private val context: Context) {
             return "> [SYSTEM]: Initializing Neural Settings Matrix..."
         }
 
-        // --- NEW: HARDWARE KILL-SWITCHES ---
+        // --- THE FIX: HARDWARE KILL-SWITCHES WITH INSTANT RAM SYNC ---
         if (cmd == "hijack on") {
             context.getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE).edit().putBoolean("vol_hijack_enabled", true).apply()
+            DevilkingService.isHijackEnabled = true // Instantly updates the running service
             return "> [SYSTEM]: Hardware Volume Hijack ENGAGED."
         }
         if (cmd == "hijack off") {
             context.getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE).edit().putBoolean("vol_hijack_enabled", false).apply()
+            DevilkingService.isHijackEnabled = false // Instantly updates the running service
             return "> [SYSTEM]: Hardware Volume Hijack DISABLED. Normal volume restored."
         }
 
