@@ -21,8 +21,9 @@ import java.util.concurrent.TimeUnit
 
 class DevilkingService : AccessibilityService() {
 
-    // THE FIX: State locks for the hardware clock
-    private var isMicTriggered = false
+    // Restored BOTH variables from your working older code
+    private var volDownPressTime = 0L
+    private var volUpPressTime = 0L
 
     companion object {
         var instance: DevilkingService? = null
@@ -35,47 +36,56 @@ class DevilkingService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye Ready.")
+        Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye & Vintage Volume Ready.")
     }
 
-    // THE VIVO BYPASS: Using native eventTime and downTime
+    // THE PRECISION MERGE: Your working old logic + The New Toggle Switch
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        // 1. Check the Kill Switch first
         val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
         val isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
 
         if (!isHijackEnabled) {
-            return super.onKeyEvent(event) 
+            return super.onKeyEvent(event) // If disabled via terminal, act like a normal phone
         }
 
-        if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            when (event.action) {
-                KeyEvent.ACTION_DOWN -> {
-                    // Calculate exactly how long the physical hardware switch has been held closed
-                    val pressDuration = event.eventTime - event.downTime
+        // 2. Your exact working historical logic
+        val action = event.action
+        val keyCode = event.keyCode
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-                    if (pressDuration > 500 && !isMicTriggered) {
-                        // Fire IMMEDIATELY while holding. Do not wait for ACTION_UP.
-                        sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
-                        isMicTriggered = true
-                    }
-                    return true // Consume the event so Vivo doesn't see it
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                if (volDownPressTime == 0L) volDownPressTime = System.currentTimeMillis()
+                return true
+            } else if (action == KeyEvent.ACTION_UP) {
+                val duration = System.currentTimeMillis() - volDownPressTime
+                volDownPressTime = 0L
+                if (duration > 500) {
+                    sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
+                } else {
+                    audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 }
-                KeyEvent.ACTION_UP -> {
-                    val pressDuration = event.eventTime - event.downTime
-                    
-                    if (!isMicTriggered && pressDuration < 500) {
-                        // It was a short, quick tap. Lower the volume manually.
-                        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                        audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-                    }
-                    
-                    // Reset the lock for the next time you press the button
-                    isMicTriggered = false 
-                    return true // Consume the event
-                }
+                return true
             }
         }
-        return super.onKeyEvent(event) // Let Volume Up pass normally
+
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                if (volUpPressTime == 0L) volUpPressTime = System.currentTimeMillis()
+                return true
+            } else if (action == KeyEvent.ACTION_UP) {
+                val duration = System.currentTimeMillis() - volUpPressTime
+                volUpPressTime = 0L
+                if (duration > 500) {
+                    executePhantomTap(540f, 1200f) 
+                } else {
+                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                }
+                return true
+            }
+        }
+        return super.onKeyEvent(event)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
