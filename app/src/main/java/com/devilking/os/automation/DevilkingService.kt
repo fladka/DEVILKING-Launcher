@@ -21,35 +21,37 @@ import java.util.concurrent.TimeUnit
 
 class DevilkingService : AccessibilityService() {
 
-    // Restored BOTH variables from your working older code
     private var volDownPressTime = 0L
     private var volUpPressTime = 0L
 
     companion object {
         var instance: DevilkingService? = null
             private set
+        
+        // THE FIX: Zero-latency RAM lock. NO disk I/O inside onKeyEvent!
+        var isHijackEnabled: Boolean = true
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        
+        // Load the kill-switch setting ONCE into RAM on boot
+        val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
+        isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
+        
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        Log.d("DEVILKING_SYS", "God Mode Online. Hybrid Eye & Vintage Volume Ready.")
+        Log.d("DEVILKING_SYS", "God Mode Online. Static RAM Hijack Ready.")
     }
 
-    // THE PRECISION MERGE: Your working old logic + The New Toggle Switch
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        // 1. Check the Kill Switch first
-        val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
-        val isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
-
+        // ZERO LATENCY CHECK - Instant RAM read
         if (!isHijackEnabled) {
-            return super.onKeyEvent(event) // If disabled via terminal, act like a normal phone
+            return super.onKeyEvent(event) 
         }
 
-        // 2. Your exact working historical logic
         val action = event.action
         val keyCode = event.keyCode
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
