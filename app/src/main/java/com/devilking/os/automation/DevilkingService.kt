@@ -28,7 +28,7 @@ class DevilkingService : AccessibilityService() {
         var instance: DevilkingService? = null
             private set
         
-        // THE FIX: Zero-latency RAM lock. NO disk I/O inside onKeyEvent!
+        // Zero-latency RAM lock
         var isHijackEnabled: Boolean = true
     }
 
@@ -36,7 +36,6 @@ class DevilkingService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         
-        // Load the kill-switch setting ONCE into RAM on boot
         val prefs = getSharedPreferences("DEVILKING_SETTINGS", Context.MODE_PRIVATE)
         isHijackEnabled = prefs.getBoolean("vol_hijack_enabled", true)
         
@@ -47,7 +46,6 @@ class DevilkingService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        // ZERO LATENCY CHECK - Instant RAM read
         if (!isHijackEnabled) {
             return super.onKeyEvent(event) 
         }
@@ -55,6 +53,11 @@ class DevilkingService : AccessibilityService() {
         val action = event.action
         val keyCode = event.keyCode
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // --- DIAGNOSTIC WIRETAP 1: DID WE CATCH THE PRESS? ---
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && action == KeyEvent.ACTION_DOWN) {
+            android.widget.Toast.makeText(this, "[SYSTEM]: Vol Down Intercepted", android.widget.Toast.LENGTH_SHORT).show()
+        }
 
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             if (action == KeyEvent.ACTION_DOWN) {
@@ -64,6 +67,8 @@ class DevilkingService : AccessibilityService() {
                 val duration = System.currentTimeMillis() - volDownPressTime
                 volDownPressTime = 0L
                 if (duration > 500) {
+                    // --- DIAGNOSTIC WIRETAP 2: DID THE TIMER WORK? ---
+                    android.widget.Toast.makeText(this, "[SYSTEM]: BROADCAST FIRED", android.widget.Toast.LENGTH_SHORT).show()
                     sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
                 } else {
                     audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
