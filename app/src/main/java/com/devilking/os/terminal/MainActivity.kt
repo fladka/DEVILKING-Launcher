@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
@@ -19,8 +16,12 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.devilking.os.ai.LocalAICore
+import com.devilking.os.ai.AcousticShield
 import kotlinx.coroutines.*
-import java.util.Locale
+import org.json.JSONObject
+import org.vosk.Recognizer
+import org.vosk.android.SpeechService
+import org.vosk.android.RecognitionListener
 
 class MainActivity : AppCompatActivity() {
     private lateinit var terminalRecyclerView: RecyclerView
@@ -29,22 +30,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: TerminalAdapter
     private val commandHistory = mutableListOf<String>()
 
-    // THE AI CORE LINK
+    // THE NEURAL & ACOUSTIC CORES
     private lateinit var aiCore: LocalAICore
+    private lateinit var acousticShield: AcousticShield
     private val uiScope = CoroutineScope(Dispatchers.Main + Job())
     
-    // VOICE RECOGNIZER
-    private lateinit var speechRecognizer: SpeechRecognizer
+    // VOSK OFFLINE ENGINE
+    private var speechService: SpeechService? = null
 
-    // THE HARDWARE HIJACK RECEIVER (Volume Button Integration)
+    // THE HARDWARE HIJACK RECEIVER
     private val hardwareHijackReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             checkAudioPermissionAndListen()
         }
     }
 
-    // THE FILE PICKER FOR CORE INJECTION
-    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    // CORE INJECTOR (brain.gguf)
+    private val corePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             printToTerminal("> [SYSTEM]: Neural Core selected. Injecting...")
             uiScope.launch(Dispatchers.IO) {
@@ -55,11 +57,34 @@ class MainActivity : AppCompatActivity() {
                         withContext(Dispatchers.Main) { printToTerminal(result) }
                     }
                 } catch (e: Exception) {
-                    withContext(Dispatchers.Main) { printToTerminal("> [!] INJECTION ERROR: ${e.message}") }
+                    withContext(Dispatchers.Main) { printToTerminal("> [!] CORE INJECTION ERROR: ${e.message}") }
                 }
             }
         } else {
-            printToTerminal("> [!] INJECTION ABORTED: No file selected.")
+            printToTerminal("> [!] INJECTION ABORTED: No core selected.")
+        }
+    }
+
+    // SHIELD INJECTOR (model.zip)
+    private val voskPickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            printToTerminal("> [SYSTEM]: Acoustic Model selected. Extracting...")
+            uiScope.launch(Dispatchers.IO) {
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val result = acousticShield.injectModelZip(inputStream)
+                        withContext(Dispatchers.Main) { 
+                            printToTerminal(result)
+                            initVoskService() 
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) { printToTerminal("> [!] SHIELD INJECTION ERROR: ${e.message}") }
+                }
+            }
+        } else {
+            printToTerminal("> [!] INJECTION ABORTED: No model selected.")
         }
     }
 
@@ -67,9 +92,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         aiCore = LocalAICore(this)
+        acousticShield = AcousticShield(this)
         
         setupUI()
-        setupVoiceAgent()
         setupKeyboardTraps()
 
         // REGISTER THE HARDWARE HIJACK LISTENER
@@ -81,8 +106,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         commandHistory.add("DEVILKING OS [Version 1.0.0]")
-        commandHistory.add("> Audio Matrix: Offline. Tap [MIC] or HOLD VOL DOWN to engage.")
+        commandHistory.add("> Hardware Hijack: Online. Tap [MIC] or HOLD VOL DOWN to engage.")
         commandHistory.add(aiCore.checkCoreStatus())
+        
+        // Auto-load Vosk if previously injected
+        if (acousticShield.autoLoadExistingModel()) {
+            initVoskService()
+        }
+        commandHistory.add(acousticShield.checkShieldStatus())
         adapter.notifyDataSetChanged()
 
         micButton.setOnClickListener {
@@ -130,7 +161,6 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(android.graphics.Color.parseColor("#1F2937"))
             setPadding(24, 24, 24, 24)
             
-            // LOCK TO SINGLE LINE
             maxLines = 1
             isSingleLine = true
             inputType = android.text.InputType.TYPE_CLASS_TEXT
@@ -157,76 +187,96 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupKeyboardTraps() {
-        // THE BULLETPROOF ENTER KEY TRAP
         commandInput.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_ENTER) {
                 val input = commandInput.text.toString().trim()
-                if (input.isNotEmpty()) {
-                    processInput(input)
-                }
-                return@setOnKeyListener true // Consume the Enter key instantly
+                if (input.isNotEmpty()) processInput(input)
+                return@setOnKeyListener true
             }
             false
         }
 
-        // CATCHES VIRTUAL KEYBOARD "SEND" BUTTON
         commandInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
                 val input = commandInput.text.toString().trim()
-                if (input.isNotEmpty()) {
-                    processInput(input)
-                }
+                if (input.isNotEmpty()) processInput(input)
                 true
-            } else {
-                false
-            }
+            } else false
         }
     }
 
-    private fun setupVoiceAgent() {
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                micButton.text = "[ LISTENING ]"
-                micButton.setBackgroundColor(android.graphics.Color.RED)
+    private fun initVoskService() {
+        if (acousticShield.isArmed && acousticShield.voskModel != null && speechService == null) {
+            try {
+                // Vosk strictly requires 16000.0f sample rate
+                val recognizer = Recognizer(acousticShield.voskModel, 16000.0f)
+                speechService = SpeechService(recognizer, 16000.0f)
+            } catch (e: Exception) {
+                printToTerminal("> [!] VOSK ERROR: Failed to init audio engine.")
             }
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {
-                resetMicButton()
-            }
-            override fun onError(error: Int) {
-                resetMicButton()
-                printToTerminal("> [!] AUDIO ERROR: Signal lost or no speech detected.")
-            }
-            override fun onResults(results: Bundle?) {
-                resetMicButton()
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    val spokenText = matches[0]
-                    processInput(spokenText)
-                }
-            }
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
+        }
     }
 
     private fun checkAudioPermissionAndListen() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         } else {
-            startListening()
+            toggleListening()
         }
     }
 
-    private fun startListening() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+    private fun toggleListening() {
+        if (!acousticShield.isArmed) {
+            printToTerminal("> [!] SHIELD OFFLINE: Run 'inject vosk' to load the model.")
+            return
         }
-        speechRecognizer.startListening(intent)
+
+        if (speechService == null) initVoskService()
+
+        if (micButton.text == "[ LISTENING ]") {
+            speechService?.stop()
+            resetMicButton()
+        } else {
+            micButton.text = "[ LISTENING ]"
+            micButton.setBackgroundColor(android.graphics.Color.RED)
+            speechService?.startListening(voskListener)
+        }
+    }
+
+    private val voskListener = object : RecognitionListener {
+        override fun onPartialResult(hypothesis: String?) {}
+        
+        override fun onResult(hypothesis: String?) {
+            // Vosk detects a pause in speech and triggers this. We instantly kill the mic.
+            speechService?.stop()
+            resetMicButton()
+            handleVoskJSON(hypothesis)
+        }
+        
+        override fun onFinalResult(hypothesis: String?) {
+            resetMicButton()
+            handleVoskJSON(hypothesis)
+        }
+        
+        override fun onError(exception: Exception?) {
+            resetMicButton()
+            printToTerminal("> [!] VOSK ERROR: ${exception?.message}")
+        }
+        
+        override fun onTimeout() {
+            resetMicButton()
+        }
+    }
+
+    private fun handleVoskJSON(jsonStr: String?) {
+        if (jsonStr == null) return
+        try {
+            val jsonObject = JSONObject(jsonStr)
+            val text = jsonObject.optString("text", "")
+            if (text.isNotBlank()) {
+                processInput(text)
+            }
+        } catch (e: Exception) {}
     }
 
     private fun resetMicButton() {
@@ -239,9 +289,13 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("root@devilking:~$ $cleanInput")
         commandInput.text.clear()
 
-        // INTERCEPT INJECT CORE COMMAND
+        // INTERCEPT FILE INJECTIONS
         if (cleanInput.lowercase() == "inject core") {
-            filePickerLauncher.launch("*/*")
+            corePickerLauncher.launch("*/*")
+            return
+        }
+        if (cleanInput.lowercase() == "inject vosk") {
+            voskPickerLauncher.launch("application/zip")
             return
         }
 
@@ -261,7 +315,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        speechRecognizer.destroy()
+        speechService?.stop()
+        speechService?.shutdown()
         unregisterReceiver(hardwareHijackReceiver)
         uiScope.cancel()
     }
