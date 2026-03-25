@@ -65,5 +65,6 @@ dependencies {
 
     // --- TIER 8: THE ACOUSTIC SHIELD (VOSK) ---
     implementation 'net.java.dev.jna:jna:5.13.0@aar'
-    implementation 'com.alphacep:vosk-android:0.3.32@aar'
+    // THE FIX: Changed 'alphacep' to 'alphacephei' so Gradle can find it
+    implementation 'com.alphacephei:vosk-android:0.3.32@aar'
 }
