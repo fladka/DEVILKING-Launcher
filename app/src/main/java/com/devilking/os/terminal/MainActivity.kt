@@ -38,10 +38,13 @@ class MainActivity : AppCompatActivity() {
     // VOSK OFFLINE ENGINE
     private var speechService: SpeechService? = null
 
-    // THE HARDWARE HIJACK RECEIVER
+    // THE HARDWARE HIJACK RECEIVER (Walkie-Talkie Mode)
     private val hardwareHijackReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
-            checkAudioPermissionAndListen()
+            when (intent?.action) {
+                "com.devilking.os.MIC_START" -> checkAudioPermissionAndStart()
+                "com.devilking.os.MIC_STOP" -> stopVoskListening()
+            }
         }
     }
 
@@ -97,8 +100,12 @@ class MainActivity : AppCompatActivity() {
         setupUI()
         setupKeyboardTraps()
 
-        // REGISTER THE HARDWARE HIJACK LISTENER
-        val filter = android.content.IntentFilter("com.devilking.os.WAKE_WORD_TRIGGERED")
+        // REGISTER THE HARDWARE HIJACK LISTENER (Updated for Dual Intents)
+        val filter = android.content.IntentFilter().apply {
+            addAction("com.devilking.os.MIC_START")
+            addAction("com.devilking.os.MIC_STOP")
+        }
+        
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(hardwareHijackReceiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
@@ -106,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         commandHistory.add("DEVILKING OS [Version 1.0.0]")
-        commandHistory.add("> Hardware Hijack: Online. Tap [MIC] or HOLD VOL DOWN to engage.")
+        commandHistory.add("> Hardware Hijack: Walkie-Talkie Mode Armed.")
         commandHistory.add(aiCore.checkCoreStatus())
         
         // Auto-load Vosk if previously injected
@@ -117,7 +124,7 @@ class MainActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
 
         micButton.setOnClickListener {
-            checkAudioPermissionAndListen()
+            checkAudioPermissionAndListen() // Preserved for manual UI toggling
         }
     }
 
@@ -217,6 +224,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- ON-SCREEN UI MIC CONTROLS ---
     private fun checkAudioPermissionAndListen() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
@@ -243,6 +251,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- HARDWARE WALKIE-TALKIE CONTROLS ---
+    private fun checkAudioPermissionAndStart() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+        } else {
+            startVoskListening()
+        }
+    }
+
+    private fun startVoskListening() {
+        if (!acousticShield.isArmed) {
+            printToTerminal("> [!] SHIELD OFFLINE: Run 'inject vosk' to load the model.")
+            return
+        }
+        if (speechService == null) initVoskService()
+
+        micButton.text = "[ LISTENING ]"
+        micButton.setBackgroundColor(android.graphics.Color.RED)
+        speechService?.startListening(voskListener)
+    }
+
+    private fun stopVoskListening() {
+        // Calling stop() forces Vosk to instantly process the final audio frame
+        speechService?.stop()
+        resetMicButton()
+    }
+
+    // --- THE VOSK CALLBACK LISTENER ---
     private val voskListener = object : RecognitionListener {
         override fun onPartialResult(hypothesis: String?) {}
         
