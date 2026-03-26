@@ -24,9 +24,18 @@ import java.util.concurrent.TimeUnit
 class DevilkingService : AccessibilityService() {
 
     private var volUpPressTime = 0L
+    private var volDownPressTime = 0L
     
     // The True Walkie-Talkie Hardware Lock
     private var isMicTriggered = false
+    
+    // The Handler loop for strict millisecond timing on Vivo
+    private val micHandler = Handler(Looper.getMainLooper())
+    private val micRunnable = Runnable {
+        sendBroadcast(Intent("com.devilking.os.MIC_START"))
+        isMicTriggered = true
+        android.widget.Toast.makeText(this, "[ MIC HOT ]", android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     // --- TIER 9: THE AUTONOMOUS SPIDER (RAM CACHE) ---
     private val activeMatrixCache = ConcurrentHashMap<String, Rect>()
@@ -65,29 +74,32 @@ class DevilkingService : AccessibilityService() {
         val keyCode = event.keyCode
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // --- THE VIVO BYPASS: TRUE WALKIE-TALKIE MODE ---
+        // --- THE VIVO BYPASS: TRUE WALKIE-TALKIE MODE (HANDLER FIX) ---
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             when (action) {
                 KeyEvent.ACTION_DOWN -> {
-                    val pressDuration = event.eventTime - event.downTime
-
-                    if (pressDuration > 500 && !isMicTriggered) {
-                        sendBroadcast(Intent("com.devilking.os.MIC_START"))
-                        isMicTriggered = true
+                    // Start the 500ms countdown the millisecond the button is touched
+                    if (volDownPressTime == 0L) {
+                        volDownPressTime = System.currentTimeMillis()
+                        micHandler.postDelayed(micRunnable, 500)
                     }
                     return true 
                 }
                 
                 KeyEvent.ACTION_UP -> {
-                    val pressDuration = event.eventTime - event.downTime
+                    // Cancel the countdown if they let go early
+                    micHandler.removeCallbacks(micRunnable)
                     
                     if (isMicTriggered) {
+                        // They were holding it. Cut the mic.
                         sendBroadcast(Intent("com.devilking.os.MIC_STOP"))
-                    } else if (pressDuration < 500) {
+                        isMicTriggered = false
+                    } else {
+                        // It was a quick tap. Lower volume normally.
                         audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                     }
                     
-                    isMicTriggered = false 
+                    volDownPressTime = 0L // Reset lock
                     return true 
                 }
             }
@@ -112,28 +124,33 @@ class DevilkingService : AccessibilityService() {
         return super.onKeyEvent(event)
     }
 
-    // --- THE SPIDER TRIGGER & THE WIRETAP ---
+    // --- THE SPIDER TRIGGER & THE VISUAL WIRETAP ---
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || !isHijackEnabled) return
+        if (event == null) return // Block removed so Spider runs regardless of hijack state
 
-        // 1. THE WIRETAP: Expose hidden Android Activity names
+        // 1. THE WIRETAP: Expose hidden Android Activity names visually
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             if (isWiretapEnabled) {
                 val pkg = event.packageName?.toString() ?: ""
                 val cls = event.className?.toString() ?: ""
                 
-                // Filter out generic popup frames, keep only true Activities/Dialogs
                 if (pkg.isNotEmpty() && cls.isNotEmpty() && !cls.startsWith("android.widget") && !cls.startsWith("android.view")) {
+                    val wiretapData = "$pkg | $cls"
+                    
+                    // The Visual Overlay Bypass: Forces the data onto your screen
+                    android.widget.Toast.makeText(this, "[WIRETAP]: $cls", android.widget.Toast.LENGTH_LONG).show()
+                    
+                    // Send to terminal as a backup
                     val wiretapIntent = Intent("com.devilking.os.WIRETAP_LOG")
-                    wiretapIntent.putExtra("activity_data", "$pkg | $cls")
+                    wiretapIntent.putExtra("activity_data", wiretapData)
                     sendBroadcast(wiretapIntent)
                 }
             }
         }
 
         // 2. THE SPIDER: Map the UI for the RAM Cache
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || 
-            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+        if (isHijackEnabled && (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || 
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)) {
             
             serviceScope.launch {
                 val rootNode = rootInActiveWindow
