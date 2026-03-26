@@ -21,8 +21,10 @@ import java.util.concurrent.TimeUnit
 
 class DevilkingService : AccessibilityService() {
 
-    private var volDownPressTime = 0L
     private var volUpPressTime = 0L
+    
+    // The True Walkie-Talkie Hardware Lock
+    private var isMicTriggered = false
 
     companion object {
         var instance: DevilkingService? = null
@@ -54,29 +56,38 @@ class DevilkingService : AccessibilityService() {
         val keyCode = event.keyCode
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // --- DIAGNOSTIC WIRETAP 1: DID WE CATCH THE PRESS? ---
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && action == KeyEvent.ACTION_DOWN) {
-            android.widget.Toast.makeText(this, "[SYSTEM]: Vol Down Intercepted", android.widget.Toast.LENGTH_SHORT).show()
-        }
-
+        // --- THE VIVO BYPASS: TRUE WALKIE-TALKIE MODE ---
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            if (action == KeyEvent.ACTION_DOWN) {
-                if (volDownPressTime == 0L) volDownPressTime = System.currentTimeMillis()
-                return true
-            } else if (action == KeyEvent.ACTION_UP) {
-                val duration = System.currentTimeMillis() - volDownPressTime
-                volDownPressTime = 0L
-                if (duration > 500) {
-                    // --- DIAGNOSTIC WIRETAP 2: DID THE TIMER WORK? ---
-                    android.widget.Toast.makeText(this, "[SYSTEM]: BROADCAST FIRED", android.widget.Toast.LENGTH_SHORT).show()
-                    sendBroadcast(Intent("com.devilking.os.WAKE_WORD_TRIGGERED"))
-                } else {
-                    audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+            when (action) {
+                KeyEvent.ACTION_DOWN -> {
+                    val pressDuration = event.eventTime - event.downTime
+
+                    // Fire IMMEDIATELY while holding. Do not wait for ACTION_UP.
+                    if (pressDuration > 500 && !isMicTriggered) {
+                        sendBroadcast(Intent("com.devilking.os.MIC_START"))
+                        isMicTriggered = true
+                    }
+                    return true // Consume the event
                 }
-                return true
+                
+                KeyEvent.ACTION_UP -> {
+                    val pressDuration = event.eventTime - event.downTime
+                    
+                    if (isMicTriggered) {
+                        // The user released the button. Cut the mic instantly.
+                        sendBroadcast(Intent("com.devilking.os.MIC_STOP"))
+                    } else if (pressDuration < 500) {
+                        // Short tap. Adjust volume down normally.
+                        audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                    }
+                    
+                    isMicTriggered = false 
+                    return true // Consume the event
+                }
             }
         }
 
+        // --- PRESERVED GOD MODE MACRO: VOLUME UP ---
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
             if (action == KeyEvent.ACTION_DOWN) {
                 if (volUpPressTime == 0L) volUpPressTime = System.currentTimeMillis()
