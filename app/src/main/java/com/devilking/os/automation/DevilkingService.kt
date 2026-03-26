@@ -15,6 +15,8 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import kotlinx.coroutines.*
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -25,6 +27,10 @@ class DevilkingService : AccessibilityService() {
     
     // The True Walkie-Talkie Hardware Lock
     private var isMicTriggered = false
+
+    // --- TIER 9: THE AUTONOMOUS SPIDER (RAM CACHE) ---
+    private val activeMatrixCache = ConcurrentHashMap<String, Rect>()
+    private val serviceScope = CoroutineScope(Dispatchers.Default + Job())
 
     companion object {
         var instance: DevilkingService? = null
@@ -62,27 +68,24 @@ class DevilkingService : AccessibilityService() {
                 KeyEvent.ACTION_DOWN -> {
                     val pressDuration = event.eventTime - event.downTime
 
-                    // Fire IMMEDIATELY while holding. Do not wait for ACTION_UP.
                     if (pressDuration > 500 && !isMicTriggered) {
                         sendBroadcast(Intent("com.devilking.os.MIC_START"))
                         isMicTriggered = true
                     }
-                    return true // Consume the event
+                    return true 
                 }
                 
                 KeyEvent.ACTION_UP -> {
                     val pressDuration = event.eventTime - event.downTime
                     
                     if (isMicTriggered) {
-                        // The user released the button. Cut the mic instantly.
                         sendBroadcast(Intent("com.devilking.os.MIC_STOP"))
                     } else if (pressDuration < 500) {
-                        // Short tap. Adjust volume down normally.
                         audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                     }
                     
                     isMicTriggered = false 
-                    return true // Consume the event
+                    return true 
                 }
             }
         }
@@ -98,7 +101,7 @@ class DevilkingService : AccessibilityService() {
                 if (duration > 500) {
                     executePhantomTap(540f, 1200f) 
                 } else {
-                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.AudioManager.FLAG_SHOW_UI)
                 }
                 return true
             }
@@ -106,10 +109,56 @@ class DevilkingService : AccessibilityService() {
         return super.onKeyEvent(event)
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    // --- THE SPIDER TRIGGER: WAKING ON UI CHANGE ---
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || !isHijackEnabled) return
+
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || 
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            
+            serviceScope.launch {
+                val rootNode = rootInActiveWindow
+                if (rootNode != null) {
+                    val newCache = ConcurrentHashMap<String, Rect>()
+                    crawlMatrix(rootNode, newCache)
+                    
+                    activeMatrixCache.clear()
+                    activeMatrixCache.putAll(newCache)
+                }
+            }
+        }
+    }
+
+    // --- THE CRAWLER: MAPPING THE UI IN THE BACKGROUND ---
+    private fun crawlMatrix(node: AccessibilityNodeInfo, cache: ConcurrentHashMap<String, Rect>) {
+        if (node.isVisibleToUser) {
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val hint = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                node.hintText?.toString()?.lowercase() ?: ""
+            } else ""
+
+            val label = text.ifEmpty { desc }.ifEmpty { hint }
+            
+            if (label.isNotEmpty() && (node.isClickable || node.isEditable || node.className?.toString()?.contains("Button") == true)) {
+                val rect = Rect()
+                node.getBoundsInScreen(rect)
+                if (rect.width() > 0 && rect.height() > 0) {
+                    cache[label] = rect
+                }
+            }
+        }
+        
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { crawlMatrix(it, cache) }
+        }
+    }
+
     override fun onInterrupt() {}
+    
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel() 
         instance = null
     }
 
@@ -246,8 +295,19 @@ class DevilkingService : AccessibilityService() {
         return if (finalResult.isEmpty()) "> [!] VISION ERROR: Unknown timeout." else finalResult
     }
 
+    // --- UPGRADED SNIPER STRIKE (0MS CACHE INJECTION) ---
     fun executeSniperStrike(targetText: String): Boolean {
         val targetLower = targetText.lowercase()
+        
+        // 1. FAST PATH: Check the Spider's RAM Cache first
+        for ((label, rect) in activeMatrixCache) {
+            if (label.contains(targetLower)) {
+                executePhantomTap(rect.centerX().toFloat(), rect.centerY().toFloat())
+                return true
+            }
+        }
+        
+        // 2. FALLBACK PATH: Do a manual deep scan if not in cache
         var bestNode: AccessibilityNodeInfo? = null
 
         fun scanNodesForSniper(node: AccessibilityNodeInfo) {
@@ -258,10 +318,11 @@ class DevilkingService : AccessibilityService() {
                     node.hintText?.toString()?.lowercase() ?: ""
                 } else ""
 
-                if (text.startsWith("root@devilking:~") || text.startsWith("> [") || text.contains("--- active screen matrix ---")) {
-                } else if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
-                    if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
-                        bestNode = node
+                if (!text.startsWith("root@devilking:~") && !text.startsWith("> [") && !text.contains("--- active screen matrix ---")) {
+                    if (text.contains(targetLower) || contentDesc.contains(targetLower) || hint.contains(targetLower)) {
+                        if (bestNode == null || node.isClickable || node.className?.toString()?.contains("Button") == true) {
+                            bestNode = node
+                        }
                     }
                 }
             }
