@@ -38,6 +38,9 @@ class DevilkingService : AccessibilityService() {
         
         // Zero-latency RAM lock
         var isHijackEnabled: Boolean = true
+        
+        // --- TIER 10: THE WIRETAP (TELEMETRY FLAG) ---
+        var isWiretapEnabled: Boolean = false 
     }
 
     override fun onServiceConnected() {
@@ -101,7 +104,7 @@ class DevilkingService : AccessibilityService() {
                 if (duration > 500) {
                     executePhantomTap(540f, 1200f) 
                 } else {
-                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.AudioManager.FLAG_SHOW_UI)
+                    audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                 }
                 return true
             }
@@ -109,10 +112,26 @@ class DevilkingService : AccessibilityService() {
         return super.onKeyEvent(event)
     }
 
-    // --- THE SPIDER TRIGGER: WAKING ON UI CHANGE ---
+    // --- THE SPIDER TRIGGER & THE WIRETAP ---
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || !isHijackEnabled) return
 
+        // 1. THE WIRETAP: Expose hidden Android Activity names
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            if (isWiretapEnabled) {
+                val pkg = event.packageName?.toString() ?: ""
+                val cls = event.className?.toString() ?: ""
+                
+                // Filter out generic popup frames, keep only true Activities/Dialogs
+                if (pkg.isNotEmpty() && cls.isNotEmpty() && !cls.startsWith("android.widget") && !cls.startsWith("android.view")) {
+                    val wiretapIntent = Intent("com.devilking.os.WIRETAP_LOG")
+                    wiretapIntent.putExtra("activity_data", "$pkg | $cls")
+                    sendBroadcast(wiretapIntent)
+                }
+            }
+        }
+
+        // 2. THE SPIDER: Map the UI for the RAM Cache
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || 
             event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             
