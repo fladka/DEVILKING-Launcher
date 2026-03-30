@@ -38,12 +38,16 @@ class MainActivity : AppCompatActivity() {
     // VOSK OFFLINE ENGINE
     private var speechService: SpeechService? = null
 
-    // THE HARDWARE HIJACK RECEIVER (Walkie-Talkie Mode)
+    // THE HARDWARE HIJACK RECEIVER (Walkie-Talkie Mode & Wiretap)
     private val hardwareHijackReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             when (intent?.action) {
                 "com.devilking.os.MIC_START" -> checkAudioPermissionAndStart()
                 "com.devilking.os.MIC_STOP" -> stopVoskListening()
+                "com.devilking.os.WIRETAP_LOG" -> {
+                    val data = intent.getStringExtra("activity_data") ?: "UNKNOWN"
+                    printToTerminal("> [WIRETAP EXPOSED]: $data")
+                }
             }
         }
     }
@@ -100,10 +104,11 @@ class MainActivity : AppCompatActivity() {
         setupUI()
         setupKeyboardTraps()
 
-        // REGISTER THE HARDWARE HIJACK LISTENER (Updated for Dual Intents)
+        // REGISTER THE HARDWARE HIJACK LISTENER (Updated for Dual Intents & Wiretap)
         val filter = android.content.IntentFilter().apply {
             addAction("com.devilking.os.MIC_START")
             addAction("com.devilking.os.MIC_STOP")
+            addAction("com.devilking.os.WIRETAP_LOG") // <--- REQUIRED FOR WIRETAP
         }
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -124,7 +129,7 @@ class MainActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
 
         micButton.setOnClickListener {
-            checkAudioPermissionAndListen() // Preserved for manual UI toggling
+            checkAudioPermissionAndListen()
         }
     }
 
@@ -224,7 +229,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- ON-SCREEN UI MIC CONTROLS ---
     private fun checkAudioPermissionAndListen() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
@@ -251,7 +255,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- HARDWARE WALKIE-TALKIE CONTROLS ---
     private fun checkAudioPermissionAndStart() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
@@ -273,17 +276,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopVoskListening() {
-        // Calling stop() forces Vosk to instantly process the final audio frame
         speechService?.stop()
         resetMicButton()
     }
 
-    // --- THE VOSK CALLBACK LISTENER ---
     private val voskListener = object : RecognitionListener {
         override fun onPartialResult(hypothesis: String?) {}
         
         override fun onResult(hypothesis: String?) {
-            // Vosk detects a pause in speech and triggers this. We instantly kill the mic.
             speechService?.stop()
             resetMicButton()
             handleVoskJSON(hypothesis)
@@ -325,7 +325,7 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("root@devilking:~$ $cleanInput")
         commandInput.text.clear()
 
-        // INTERCEPT FILE INJECTIONS
+        // --- HARDWARE INTERCEPTS ---
         if (cleanInput.lowercase() == "inject core") {
             corePickerLauncher.launch("*/*")
             return
@@ -334,7 +334,20 @@ class MainActivity : AppCompatActivity() {
             voskPickerLauncher.launch("application/zip")
             return
         }
+        
+        // --- THE WIRETAP CONTROLS ---
+        if (cleanInput.lowercase() == "wiretap on") {
+            com.devilking.os.automation.DevilkingService.isWiretapEnabled = true
+            printToTerminal("> [SYSTEM]: WIRETAP ARMED. Open any app to reveal its hidden Activity name.")
+            return
+        }
+        if (cleanInput.lowercase() == "wiretap off") {
+            com.devilking.os.automation.DevilkingService.isWiretapEnabled = false
+            printToTerminal("> [SYSTEM]: WIRETAP DISARMED.")
+            return
+        }
 
+        // --- FALLBACK TO NEURAL CORE ---
         uiScope.launch(Dispatchers.IO) {
             val response = aiCore.generateResponse(cleanInput)
             withContext(Dispatchers.Main) {
