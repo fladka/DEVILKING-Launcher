@@ -404,6 +404,24 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
+        // --- STORAGE PERMISSION BYPASS ---
+        if (cleanInput.lowercase() == "grant storage") {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.data = android.net.Uri.parse("package:$packageName")
+                    startActivity(intent)
+                    printToTerminal("> [SYSTEM]: Opening Storage Settings. Please grant 'All files access'.")
+                } catch (e: Exception) {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    startActivity(intent)
+                }
+            } else {
+                ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 2)
+            }
+            return
+        }
+
         // --- THE SKILL LIBRARY TRIGGER ---
         if (cleanInput.lowercase().startsWith("run ")) {
             val scriptName = cleanInput.substring(4).trim()
