@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Environment
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
@@ -23,6 +24,7 @@ import org.json.JSONObject
 import org.vosk.Recognizer
 import org.vosk.android.SpeechService
 import org.vosk.android.RecognitionListener
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private lateinit var terminalRecyclerView: RecyclerView
@@ -320,6 +322,73 @@ class MainActivity : AppCompatActivity() {
         micButton.setBackgroundColor(android.graphics.Color.parseColor("#00FF41"))
     }
 
+    // --- WEAPON B: THE SKILL LIBRARY (MACRO ENGINE) ---
+    private fun runSkillScript(scriptName: String) {
+        val fileName = if (scriptName.endsWith(".txt")) scriptName else "$scriptName.txt"
+        
+        // Target the public Documents/DEVILKING_VAULT folder on your Vivo
+        val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
+        val scriptFile = File(vaultDir, fileName)
+
+        if (!scriptFile.exists()) {
+            printToTerminal("> [!] SKILL NOT FOUND: Create '$fileName' inside Documents/DEVILKING_VAULT/")
+            return
+        }
+
+        printToTerminal("> [SYSTEM]: Initiating Skill Sequence: $scriptName...")
+        
+        // Launch on a background thread so the UI doesn't freeze
+        uiScope.launch(Dispatchers.IO) {
+            try {
+                val lines = scriptFile.readLines()
+                for (line in lines) {
+                    val cmd = line.trim()
+                    
+                    // Ignore empty lines or comments
+                    if (cmd.isEmpty() || cmd.startsWith("//") || cmd.startsWith("#")) continue
+                    
+                    // Handle specific delay commands to let the UI catch up
+                    if (cmd.lowercase().startsWith("delay ")) {
+                        val time = cmd.substring(6).toLongOrNull() ?: 1000L
+                        withContext(Dispatchers.Main) { printToTerminal("> [WAITING]: ${time}ms") }
+                        delay(time)
+                    } else {
+                        // Pass the string right back into your existing terminal logic
+                        withContext(Dispatchers.Main) { 
+                            // Using a direct call to the service for 'snipe' to avoid the AI loop
+                            if (cmd.lowercase().startsWith("snipe ")) {
+                                printToTerminal("root@devilking:~$ $cmd")
+                                val target = cmd.substring(6).trim()
+                                com.devilking.os.automation.DevilkingService.instance?.executeSniperStrike(target)
+                            } 
+                            // Using a direct call for 'open'
+                            else if (cmd.lowercase().startsWith("open ")) {
+                                printToTerminal("root@devilking:~$ $cmd")
+                                val appName = cmd.substring(5).trim()
+                                val intent = packageManager.getLaunchIntentForPackage("com.$appName") ?: packageManager.getLaunchIntentForPackage(appName)
+                                if (intent != null) {
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                                    startActivity(intent)
+                                } else {
+                                    printToTerminal("> [!] FAILED TO OPEN: '$appName'")
+                                }
+                            }
+                            // Add other direct commands here as needed
+                            else {
+                                processInput(cmd) 
+                            }
+                        }
+                        // Default buffer between physical actions so the screen can render
+                        delay(800) 
+                    }
+                }
+                withContext(Dispatchers.Main) { printToTerminal("> [SYSTEM]: Skill Sequence Complete.") }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { printToTerminal("> [!] SKILL ERROR: Failed to read file. Check Storage Permissions.") }
+            }
+        }
+    }
+
     private fun processInput(input: String) {
         val cleanInput = input.trim()
         printToTerminal("root@devilking:~$ $cleanInput")
@@ -335,6 +404,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
+        // --- THE SKILL LIBRARY TRIGGER ---
+        if (cleanInput.lowercase().startsWith("run ")) {
+            val scriptName = cleanInput.substring(4).trim()
+            runSkillScript(scriptName)
+            return
+        }
+
         // --- THE WIRETAP CONTROLS ---
         if (cleanInput.lowercase() == "wiretap on") {
             com.devilking.os.automation.DevilkingService.isWiretapEnabled = true
