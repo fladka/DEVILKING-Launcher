@@ -18,7 +18,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.devilking.os.ai.LocalAICore
 import com.devilking.os.ai.AcousticShield
+import com.devilking.os.automation.CommandRegistry
 import com.devilking.os.automation.IntentVault
+import com.devilking.os.automation.ToolManifest
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.vosk.Recognizer
@@ -33,16 +35,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: TerminalAdapter
     private val commandHistory = mutableListOf<String>()
 
-    // THE NEURAL & ACOUSTIC CORES & VAULTS
+    // THE CORE SYSTEMS
     private lateinit var aiCore: LocalAICore
     private lateinit var acousticShield: AcousticShield
     private lateinit var intentVault: IntentVault
+    private lateinit var commandRegistry: CommandRegistry
     private val uiScope = CoroutineScope(Dispatchers.Main + Job())
     
     // VOSK OFFLINE ENGINE
     private var speechService: SpeechService? = null
 
-    // THE HARDWARE HIJACK RECEIVER (Walkie-Talkie Mode & Wiretap)
+    // THE HARDWARE HIJACK RECEIVER
     private val hardwareHijackReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             when (intent?.action) {
@@ -56,7 +59,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // CORE INJECTOR (brain.gguf)
     private val corePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             printToTerminal("> [SYSTEM]: Neural Core selected. Injecting...")
@@ -71,12 +73,9 @@ class MainActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) { printToTerminal("> [!] CORE INJECTION ERROR: ${e.message}") }
                 }
             }
-        } else {
-            printToTerminal("> [!] INJECTION ABORTED: No core selected.")
         }
     }
 
-    // SHIELD INJECTOR (model.zip)
     private val voskPickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             printToTerminal("> [SYSTEM]: Acoustic Model selected. Extracting...")
@@ -94,8 +93,6 @@ class MainActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) { printToTerminal("> [!] SHIELD INJECTION ERROR: ${e.message}") }
                 }
             }
-        } else {
-            printToTerminal("> [!] INJECTION ABORTED: No model selected.")
         }
     }
 
@@ -104,8 +101,9 @@ class MainActivity : AppCompatActivity() {
         
         aiCore = LocalAICore(this)
         acousticShield = AcousticShield(this)
-        intentVault = IntentVault(this) // Initialize the Teleporter Vault
+        intentVault = IntentVault(this)
         
+        setupCommandRegistry() // Initialize the Dynamic Router
         setupUI()
         setupKeyboardTraps()
 
@@ -121,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(hardwareHijackReceiver, filter)
         }
 
-        commandHistory.add("DEVILKING OS [Version 1.0.0]")
+        commandHistory.add("DEVILKING OS [Version 1.1.0 - Manifest Router]")
         commandHistory.add("> Hardware Hijack: Walkie-Talkie Mode Armed.")
         commandHistory.add(aiCore.checkCoreStatus())
         
@@ -136,6 +134,155 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- WEAPON D: THE TOOL MANIFEST (Dynamic Routing) ---
+    private fun setupCommandRegistry() {
+        commandRegistry = CommandRegistry()
+
+        commandRegistry.register(ToolManifest("Manifest", "Lists all active DEVILKING tools", "help") {
+            printToTerminal(commandRegistry.getManifestMenu())
+        })
+
+        commandRegistry.register(ToolManifest("Clear", "Wipes the terminal display", "clear") {
+            commandHistory.clear()
+            adapter.notifyDataSetChanged()
+        })
+
+        commandRegistry.register(ToolManifest("Inject Core", "Loads GGUF Neural model", "inject core") {
+            corePickerLauncher.launch("*/*")
+        })
+
+        commandRegistry.register(ToolManifest("Inject Vosk", "Loads Acoustic model", "inject vosk") {
+            voskPickerLauncher.launch("application/zip")
+        })
+
+        commandRegistry.register(ToolManifest("Storage Bypass", "Grants master storage keys", "grant storage") {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.data = android.net.Uri.parse("package:$packageName")
+                    startActivity(intent)
+                    printToTerminal("> [SYSTEM]: Opening Storage Settings. Please grant 'All files access'.")
+                } catch (e: Exception) {
+                    startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                }
+            } else {
+                ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 2)
+            }
+        })
+
+        commandRegistry.register(ToolManifest("Skill Engine", "Executes local .txt macro scripts", "run ") { input ->
+            runSkillScript(input.substring(4).trim())
+        })
+
+        commandRegistry.register(ToolManifest("Wiretap Arm", "Intercepts UI telemetry", "wiretap on") {
+            com.devilking.os.automation.DevilkingService.isWiretapEnabled = true
+            printToTerminal("> [SYSTEM]: WIRETAP ARMED. Open any app to reveal its hidden Activity name.")
+        })
+
+        commandRegistry.register(ToolManifest("Wiretap Disarm", "Disables telemetry", "wiretap off") {
+            com.devilking.os.automation.DevilkingService.isWiretapEnabled = false
+            printToTerminal("> [SYSTEM]: WIRETAP DISARMED.")
+        })
+
+        commandRegistry.register(ToolManifest("Vault Dump", "Prints all locked Intent routes", "dump vault") {
+            printToTerminal(intentVault.dumpVault())
+        })
+
+        commandRegistry.register(ToolManifest("Teleporter", "Bypasses UI to open locked routes", "teleport ") { input ->
+            val target = input.substring(9).trim()
+            if (target.isNotEmpty()) printToTerminal(intentVault.teleport(target))
+            else printToTerminal("> [!] SYNTAX ERROR: Use 'teleport [target]'")
+        })
+
+        commandRegistry.register(ToolManifest("Route Locker", "Saves a new Intent target", "lock route ") { input ->
+            val payload = input.substring(11).trim()
+            val lastSpace = payload.lastIndexOf(' ')
+            if (lastSpace != -1) {
+                val commandName = payload.substring(0, lastSpace)
+                val packageClass = payload.substring(lastSpace + 1)
+                printToTerminal(intentVault.lockRoute(commandName, packageClass))
+            } else {
+                printToTerminal("> [!] SYNTAX ERROR: Use 'lock route [name] [package|class]'")
+            }
+        })
+    }
+
+    private fun runSkillScript(scriptName: String) {
+        val fileName = if (scriptName.endsWith(".txt")) scriptName else "$scriptName.txt"
+        val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
+        val scriptFile = File(vaultDir, fileName)
+
+        if (!scriptFile.exists()) {
+            printToTerminal("> [!] SKILL NOT FOUND: Create '$fileName' inside Documents/DEVILKING_VAULT/")
+            return
+        }
+
+        printToTerminal("> [SYSTEM]: Initiating Skill Sequence: $scriptName...")
+        
+        uiScope.launch(Dispatchers.IO) {
+            try {
+                val lines = scriptFile.readLines()
+                for (line in lines) {
+                    val cmd = line.trim()
+                    if (cmd.isEmpty() || cmd.startsWith("//") || cmd.startsWith("#")) continue
+                    
+                    if (cmd.lowercase().startsWith("delay ")) {
+                        val time = cmd.substring(6).toLongOrNull() ?: 1000L
+                        withContext(Dispatchers.Main) { printToTerminal("> [WAITING]: ${time}ms") }
+                        delay(time)
+                    } else {
+                        withContext(Dispatchers.Main) { 
+                            if (cmd.lowercase().startsWith("snipe ")) {
+                                printToTerminal("root@devilking:~$ $cmd")
+                                val target = cmd.substring(6).trim()
+                                com.devilking.os.automation.DevilkingService.instance?.executeSniperStrike(target)
+                            } 
+                            else if (cmd.lowercase().startsWith("open ")) {
+                                printToTerminal("root@devilking:~$ $cmd")
+                                val appName = cmd.substring(5).trim()
+                                val intent = packageManager.getLaunchIntentForPackage("com.$appName") ?: packageManager.getLaunchIntentForPackage(appName)
+                                if (intent != null) {
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                                    startActivity(intent)
+                                } else {
+                                    printToTerminal("> [!] FAILED TO OPEN: '$appName'")
+                                }
+                            } else {
+                                processInput(cmd) 
+                            }
+                        }
+                        delay(800) 
+                    }
+                }
+                withContext(Dispatchers.Main) { printToTerminal("> [SYSTEM]: Skill Sequence Complete.") }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { printToTerminal("> [!] SKILL ERROR: Failed to read file. Check Storage Permissions.") }
+            }
+        }
+    }
+
+    private fun processInput(input: String) {
+        val cleanInput = input.trim()
+        if (cleanInput != "clear") {
+             printToTerminal("root@devilking:~$ $cleanInput")
+        }
+        commandInput.text.clear()
+
+        // 1. Check if the input is a registered system tool
+        if (commandRegistry.process(cleanInput)) {
+            return
+        }
+
+        // 2. If it is NOT a system tool, fall back to the AI Neural Core
+        uiScope.launch(Dispatchers.IO) {
+            val response = aiCore.generateResponse(cleanInput)
+            withContext(Dispatchers.Main) {
+                printToTerminal(response)
+            }
+        }
+    }
+
+    // --- UI & AUDIO BOILERPLATE BELOW ---
     private fun setupUI() {
         val mainContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -284,23 +431,19 @@ class MainActivity : AppCompatActivity() {
 
     private val voskListener = object : RecognitionListener {
         override fun onPartialResult(hypothesis: String?) {}
-        
         override fun onResult(hypothesis: String?) {
             speechService?.stop()
             resetMicButton()
             handleVoskJSON(hypothesis)
         }
-        
         override fun onFinalResult(hypothesis: String?) {
             resetMicButton()
             handleVoskJSON(hypothesis)
         }
-        
         override fun onError(exception: Exception?) {
             resetMicButton()
             printToTerminal("> [!] VOSK ERROR: ${exception?.message}")
         }
-        
         override fun onTimeout() {
             resetMicButton()
         }
@@ -320,163 +463,6 @@ class MainActivity : AppCompatActivity() {
     private fun resetMicButton() {
         micButton.text = "[ MIC ]"
         micButton.setBackgroundColor(android.graphics.Color.parseColor("#00FF41"))
-    }
-
-    // --- WEAPON B: THE SKILL LIBRARY (MACRO ENGINE) ---
-    private fun runSkillScript(scriptName: String) {
-        val fileName = if (scriptName.endsWith(".txt")) scriptName else "$scriptName.txt"
-        
-        // Target the public Documents/DEVILKING_VAULT folder on your Vivo
-        val vaultDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DEVILKING_VAULT")
-        val scriptFile = File(vaultDir, fileName)
-
-        if (!scriptFile.exists()) {
-            printToTerminal("> [!] SKILL NOT FOUND: Create '$fileName' inside Documents/DEVILKING_VAULT/")
-            return
-        }
-
-        printToTerminal("> [SYSTEM]: Initiating Skill Sequence: $scriptName...")
-        
-        // Launch on a background thread so the UI doesn't freeze
-        uiScope.launch(Dispatchers.IO) {
-            try {
-                val lines = scriptFile.readLines()
-                for (line in lines) {
-                    val cmd = line.trim()
-                    
-                    // Ignore empty lines or comments
-                    if (cmd.isEmpty() || cmd.startsWith("//") || cmd.startsWith("#")) continue
-                    
-                    // Handle specific delay commands to let the UI catch up
-                    if (cmd.lowercase().startsWith("delay ")) {
-                        val time = cmd.substring(6).toLongOrNull() ?: 1000L
-                        withContext(Dispatchers.Main) { printToTerminal("> [WAITING]: ${time}ms") }
-                        delay(time)
-                    } else {
-                        // Pass the string right back into your existing terminal logic
-                        withContext(Dispatchers.Main) { 
-                            // Using a direct call to the service for 'snipe' to avoid the AI loop
-                            if (cmd.lowercase().startsWith("snipe ")) {
-                                printToTerminal("root@devilking:~$ $cmd")
-                                val target = cmd.substring(6).trim()
-                                com.devilking.os.automation.DevilkingService.instance?.executeSniperStrike(target)
-                            } 
-                            // Using a direct call for 'open'
-                            else if (cmd.lowercase().startsWith("open ")) {
-                                printToTerminal("root@devilking:~$ $cmd")
-                                val appName = cmd.substring(5).trim()
-                                val intent = packageManager.getLaunchIntentForPackage("com.$appName") ?: packageManager.getLaunchIntentForPackage(appName)
-                                if (intent != null) {
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                                    startActivity(intent)
-                                } else {
-                                    printToTerminal("> [!] FAILED TO OPEN: '$appName'")
-                                }
-                            }
-                            // Add other direct commands here as needed
-                            else {
-                                processInput(cmd) 
-                            }
-                        }
-                        // Default buffer between physical actions so the screen can render
-                        delay(800) 
-                    }
-                }
-                withContext(Dispatchers.Main) { printToTerminal("> [SYSTEM]: Skill Sequence Complete.") }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { printToTerminal("> [!] SKILL ERROR: Failed to read file. Check Storage Permissions.") }
-            }
-        }
-    }
-
-    private fun processInput(input: String) {
-        val cleanInput = input.trim()
-        printToTerminal("root@devilking:~$ $cleanInput")
-        commandInput.text.clear()
-
-        // --- HARDWARE INTERCEPTS ---
-        if (cleanInput.lowercase() == "inject core") {
-            corePickerLauncher.launch("*/*")
-            return
-        }
-        if (cleanInput.lowercase() == "inject vosk") {
-            voskPickerLauncher.launch("application/zip")
-            return
-        }
-        
-        // --- STORAGE PERMISSION BYPASS ---
-        if (cleanInput.lowercase() == "grant storage") {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                try {
-                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = android.net.Uri.parse("package:$packageName")
-                    startActivity(intent)
-                    printToTerminal("> [SYSTEM]: Opening Storage Settings. Please grant 'All files access'.")
-                } catch (e: Exception) {
-                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    startActivity(intent)
-                }
-            } else {
-                ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 2)
-            }
-            return
-        }
-
-        // --- THE SKILL LIBRARY TRIGGER ---
-        if (cleanInput.lowercase().startsWith("run ")) {
-            val scriptName = cleanInput.substring(4).trim()
-            runSkillScript(scriptName)
-            return
-        }
-
-        // --- THE WIRETAP CONTROLS ---
-        if (cleanInput.lowercase() == "wiretap on") {
-            com.devilking.os.automation.DevilkingService.isWiretapEnabled = true
-            printToTerminal("> [SYSTEM]: WIRETAP ARMED. Open any app to reveal its hidden Activity name.")
-            return
-        }
-        if (cleanInput.lowercase() == "wiretap off") {
-            com.devilking.os.automation.DevilkingService.isWiretapEnabled = false
-            printToTerminal("> [SYSTEM]: WIRETAP DISARMED.")
-            return
-        }
-
-        // --- THE TELEPORTER (INTENT VAULT) CONTROLS ---
-        if (cleanInput.lowercase() == "dump vault") {
-            printToTerminal(intentVault.dumpVault())
-            return
-        }
-
-        if (cleanInput.lowercase().startsWith("teleport ")) {
-            val target = cleanInput.substring(9).trim()
-            if (target.isNotEmpty()) {
-                printToTerminal(intentVault.teleport(target))
-            } else {
-                printToTerminal("> [!] SYNTAX ERROR: Use 'teleport [target]'")
-            }
-            return
-        }
-
-        if (cleanInput.lowercase().startsWith("lock route ")) {
-            val payload = cleanInput.substring(11).trim()
-            val lastSpace = payload.lastIndexOf(' ')
-            if (lastSpace != -1) {
-                val commandName = payload.substring(0, lastSpace)
-                val packageClass = payload.substring(lastSpace + 1)
-                printToTerminal(intentVault.lockRoute(commandName, packageClass))
-            } else {
-                printToTerminal("> [!] SYNTAX ERROR: Use 'lock route [name] [package|class]'")
-            }
-            return
-        }
-
-        // --- FALLBACK TO NEURAL CORE ---
-        uiScope.launch(Dispatchers.IO) {
-            val response = aiCore.generateResponse(cleanInput)
-            withContext(Dispatchers.Main) {
-                printToTerminal(response)
-            }
-        }
     }
 
     private fun printToTerminal(text: String) {
