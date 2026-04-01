@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(hardwareHijackReceiver, filter)
         }
 
-        commandHistory.add("DEVILKING OS [Version 1.1.0 - Manifest Router]")
+        commandHistory.add("DEVILKING OS [Version 1.2.0 - ReAct Agent]")
         commandHistory.add("> Hardware Hijack: Walkie-Talkie Mode Armed.")
         commandHistory.add(aiCore.checkCoreStatus())
         
@@ -261,6 +261,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- PATH 1: THE AUTONOMOUS AGENT (ReAct Engine) ---
+    private fun askAutonomousAgent(userInput: String) {
+        val manifest = commandRegistry.getManifestMenu()
+        
+        val systemPrompt = """
+            You are DEVILKING OS, an autonomous mobile AI. 
+            You control an Android phone using these exact tools:
+            $manifest
+            
+            Analyze the user's request. If a tool can fulfill it, you MUST respond in this EXACT format:
+            THOUGHT: [Your reasoning]
+            COMMAND: [The exact tool command to run]
+            
+            If no tool is needed, just converse normally.
+            
+            User Request: $userInput
+        """.trimIndent()
+
+        printToTerminal("> [DEVILKING AI]: Analyzing request...")
+        
+        uiScope.launch(Dispatchers.IO) {
+            val response = aiCore.generateResponse(systemPrompt)
+            withContext(Dispatchers.Main) {
+                handleAgentResponse(response)
+            }
+        }
+    }
+
+    private fun handleAgentResponse(response: String) {
+        printToTerminal(response)
+        
+        val commandRegex = Regex("(?i)COMMAND:\\s*(.+)")
+        val match = commandRegex.find(response)
+        
+        if (match != null) {
+            val extractedCommand = match.groupValues[1].replace("*", "").replace("[", "").replace("]", "").trim()
+            printToTerminal("> [SYSTEM]: Autonomous Execution Triggered -> '$extractedCommand'")
+            
+            uiScope.launch {
+                delay(1000) 
+                processInput(extractedCommand)
+            }
+        }
+    }
+
     private fun processInput(input: String) {
         val cleanInput = input.trim()
         if (cleanInput != "clear") {
@@ -273,13 +318,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 2. If it is NOT a system tool, fall back to the AI Neural Core
-        uiScope.launch(Dispatchers.IO) {
-            val response = aiCore.generateResponse(cleanInput)
-            withContext(Dispatchers.Main) {
-                printToTerminal(response)
-            }
-        }
+        // 2. If it is NOT a system tool, trigger the Autonomous ReAct Agent
+        askAutonomousAgent(cleanInput)
     }
 
     // --- UI & AUDIO BOILERPLATE BELOW ---
