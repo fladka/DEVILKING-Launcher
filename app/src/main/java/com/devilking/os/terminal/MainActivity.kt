@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.devilking.os.ai.LocalAICore
 import com.devilking.os.ai.AcousticShield
+import com.devilking.os.automation.IntentVault
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.vosk.Recognizer
@@ -30,9 +31,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: TerminalAdapter
     private val commandHistory = mutableListOf<String>()
 
-    // THE NEURAL & ACOUSTIC CORES
+    // THE NEURAL & ACOUSTIC CORES & VAULTS
     private lateinit var aiCore: LocalAICore
     private lateinit var acousticShield: AcousticShield
+    private lateinit var intentVault: IntentVault
     private val uiScope = CoroutineScope(Dispatchers.Main + Job())
     
     // VOSK OFFLINE ENGINE
@@ -100,15 +102,15 @@ class MainActivity : AppCompatActivity() {
         
         aiCore = LocalAICore(this)
         acousticShield = AcousticShield(this)
+        intentVault = IntentVault(this) // Initialize the Teleporter Vault
         
         setupUI()
         setupKeyboardTraps()
 
-        // REGISTER THE HARDWARE HIJACK LISTENER (Updated for Dual Intents & Wiretap)
         val filter = android.content.IntentFilter().apply {
             addAction("com.devilking.os.MIC_START")
             addAction("com.devilking.os.MIC_STOP")
-            addAction("com.devilking.os.WIRETAP_LOG") // <--- REQUIRED FOR WIRETAP
+            addAction("com.devilking.os.WIRETAP_LOG")
         }
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -121,7 +123,6 @@ class MainActivity : AppCompatActivity() {
         commandHistory.add("> Hardware Hijack: Walkie-Talkie Mode Armed.")
         commandHistory.add(aiCore.checkCoreStatus())
         
-        // Auto-load Vosk if previously injected
         if (acousticShield.autoLoadExistingModel()) {
             initVoskService()
         }
@@ -220,7 +221,6 @@ class MainActivity : AppCompatActivity() {
     private fun initVoskService() {
         if (acousticShield.isArmed && acousticShield.voskModel != null && speechService == null) {
             try {
-                // Vosk strictly requires 16000.0f sample rate
                 val recognizer = Recognizer(acousticShield.voskModel, 16000.0f)
                 speechService = SpeechService(recognizer, 16000.0f)
             } catch (e: Exception) {
@@ -344,6 +344,35 @@ class MainActivity : AppCompatActivity() {
         if (cleanInput.lowercase() == "wiretap off") {
             com.devilking.os.automation.DevilkingService.isWiretapEnabled = false
             printToTerminal("> [SYSTEM]: WIRETAP DISARMED.")
+            return
+        }
+
+        // --- THE TELEPORTER (INTENT VAULT) CONTROLS ---
+        if (cleanInput.lowercase() == "dump vault") {
+            printToTerminal(intentVault.dumpVault())
+            return
+        }
+
+        if (cleanInput.lowercase().startsWith("teleport ")) {
+            val target = cleanInput.substring(9).trim()
+            if (target.isNotEmpty()) {
+                printToTerminal(intentVault.teleport(target))
+            } else {
+                printToTerminal("> [!] SYNTAX ERROR: Use 'teleport [target]'")
+            }
+            return
+        }
+
+        if (cleanInput.lowercase().startsWith("lock route ")) {
+            val payload = cleanInput.substring(11).trim()
+            val lastSpace = payload.lastIndexOf(' ')
+            if (lastSpace != -1) {
+                val commandName = payload.substring(0, lastSpace)
+                val packageClass = payload.substring(lastSpace + 1)
+                printToTerminal(intentVault.lockRoute(commandName, packageClass))
+            } else {
+                printToTerminal("> [!] SYNTAX ERROR: Use 'lock route [name] [package|class]'")
+            }
             return
         }
 
