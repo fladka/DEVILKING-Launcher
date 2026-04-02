@@ -64,7 +64,8 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
     llama_decode(ctx, batch);
 
-    for (int i = 0; i < 100; i++) {
+    // KILL-SWITCH 1: Hard cap at 20 tokens instead of 100
+    for (int i = 0; i < 20; i++) {
         float * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
         int n_vocab = llama_vocab_n_tokens(vocab);
         
@@ -81,7 +82,16 @@ Java_com_devilking_os_ai_LocalAICore_generateResponseFromJNI(JNIEnv* env, jobjec
 
         char buf[128];
         int n_chars = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
-        if (n_chars > 0) result_text += std::string(buf, n_chars);
+        if (n_chars > 0) {
+            std::string piece(buf, n_chars);
+            result_text += piece;
+            
+            // KILL-SWITCH 2: The Bracket Breakout
+            // The millisecond it types "]", it physically breaks the generation loop.
+            if (piece.find(']') != std::string::npos) {
+                break; 
+            }
+        }
 
         batch = llama_batch_get_one(&new_token_id, 1);
         if (llama_decode(ctx, batch) != 0) break;
