@@ -58,25 +58,16 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            // We strip out the old hardcoded matrix and prompts. 
-            // We just format the raw prompt coming from MainActivity into Qwen's ChatML format.
-            val formattedPrompt = "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+            // Pass the raw prompt directly. Do not add any extra ChatML tags here 
+            // because MainActivity is now handling the strict Forced Prefill.
+            val rawAnswer = generateResponseFromJNI(prompt)
             
-            // Pass the clean, un-chopped string directly to the C++ engine
-            val rawAnswer = generateResponseFromJNI(formattedPrompt)
-            
-            // Clean up the output tags
-            val cleanAnswer = rawAnswer.substringAfter("assistant\n")
-                .substringBefore("<|im_end|>")
+            // Aggressive cleanup to catch runaway text
+            val cleanAnswer = rawAnswer.replace("<|im_end|>", "")
                 .replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
                 .trim()
             
-            if (cleanAnswer.isBlank()) {
-                "> [DEVILKING AI]: (Signal Lost)"
-            } else {
-                // Return the raw text back to MainActivity so the ReAct Agent can parse it
-                cleanAnswer
-            }
+            if (cleanAnswer.isBlank()) "> [DEVILKING AI]: (Signal Lost)" else cleanAnswer
         } catch (e: Exception) { 
             "> [!] ENGINE CRASH: ${e.message}" 
         }
