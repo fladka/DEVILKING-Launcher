@@ -4,7 +4,6 @@ import android.content.Context
 import java.io.File
 import java.io.InputStream
 import java.io.FileOutputStream
-import com.devilking.os.automation.DevilkingService
 
 class LocalAICore(private val context: Context) {
 
@@ -59,39 +58,27 @@ class LocalAICore(private val context: Context) {
         }
 
         return try {
-            val vaultData = vaultManager.injectContext()
+            // We strip out the old hardcoded matrix and prompts. 
+            // We just format the raw prompt coming from MainActivity into Qwen's ChatML format.
+            val formattedPrompt = "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
             
-            // TACTICAL MATRIX COMPRESSION (Prevents RAM overload)
-            val rawMatrix = DevilkingService.instance?.dumpScreenMatrix() ?: "Hidden."
-            val matrixLines = rawMatrix.split("\n")
-            val safeMatrix = if (matrixLines.size > 12) {
-                matrixLines.take(12).joinToString("\n") + "\n[Truncated to save RAM]"
+            // Pass the clean, un-chopped string directly to the C++ engine
+            val rawAnswer = generateResponseFromJNI(formattedPrompt)
+            
+            // Clean up the output tags
+            val cleanAnswer = rawAnswer.substringAfter("assistant\n")
+                .substringBefore("<|im_end|>")
+                .replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+                .trim()
+            
+            if (cleanAnswer.isBlank()) {
+                "> [DEVILKING AI]: (Signal Lost)"
             } else {
-                rawMatrix
+                // Return the raw text back to MainActivity so the ReAct Agent can parse it
+                cleanAnswer
             }
-
-            // Condensed System Prompt
-            val systemPrompt = """
-                You are DEVILKING OS. NO chatting. Output 1 execution command in brackets.
-                Cmds: [CMD: snipe <name>], [CMD: type <text>], [CMD: scroll down], [CMD: open <app>], [CMD: macro whatsapp > <name> > <msg>]
-                Screen:
-                $safeMatrix
-            """.trimIndent()
-
-            val formattedPrompt = "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-            
-            // Hard limit prompt length to protect the 0.5B model context window
-            val finalPrompt = if (formattedPrompt.length > 1800) formattedPrompt.substring(0, 1800) else formattedPrompt
-
-            val rawAnswer = generateResponseFromJNI(finalPrompt)
-            val cleanAnswer = rawAnswer.substringAfter("assistant\n").substringBefore("<|im_end|>").replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
-            
-            if (cleanAnswer.contains("[CMD:")) {
-                val systemExecutor = com.devilking.os.system.SystemExecutor(context)
-                return systemExecutor.executeCommand(cleanAnswer)
-            }
-            
-            if (cleanAnswer.isBlank()) "> [DEVILKING AI]: (Signal Lost)" else "> [DEVILKING AI]: $cleanAnswer"
-        } catch (e: Exception) { "> [!] ENGINE CRASH: ${e.message}" }
+        } catch (e: Exception) { 
+            "> [!] ENGINE CRASH: ${e.message}" 
+        }
     }
 }
