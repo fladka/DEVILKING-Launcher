@@ -282,9 +282,16 @@ class MainActivity : AppCompatActivity() {
         printToTerminal("> [DEVILKING AI]: Analyzing request...")
         
         uiScope.launch(Dispatchers.IO) {
-            val response = aiCore.generateResponse(systemPrompt)
-            withContext(Dispatchers.Main) {
-                handleAgentResponse(response)
+            try {
+                // We wrap this in a try-catch to intercept memory buffer overflows
+                val response = aiCore.generateResponse(systemPrompt)
+                withContext(Dispatchers.Main) {
+                    handleAgentResponse(response)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    printToTerminal("> [!] AI CORE FAILURE: ${e.message ?: "Unknown Error. Check C++ Engine Memory."}")
+                }
             }
         }
     }
