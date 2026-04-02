@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(hardwareHijackReceiver, filter)
         }
 
-        commandHistory.add("DEVILKING OS [Version 1.2.0 - ReAct Agent]")
+        commandHistory.add("DEVILKING OS [Version 1.2.0 - Forced Prefill]")
         commandHistory.add("> Hardware Hijack: Walkie-Talkie Mode Armed.")
         commandHistory.add(aiCore.checkCoreStatus())
         
@@ -261,55 +261,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- PATH 1: THE AUTONOMOUS AGENT (ReAct Engine) ---
+    // --- PATH 1: THE AUTONOMOUS AGENT (Forced Prefill Edition) ---
     private fun askAutonomousAgent(userInput: String) {
-        val manifest = commandRegistry.getManifestMenu()
+        // Compress the manifest to save RAM and context window
+        val manifest = commandRegistry.getManifestMenu().replace("\n", " | ")
         
-        val systemPrompt = """
-            You are DEVILKING OS, an autonomous mobile AI. 
-            You control an Android phone using these exact tools:
-            $manifest
-            
-            Analyze the user's request. If a tool can fulfill it, you MUST respond in this EXACT format:
-            THOUGHT: [Your reasoning]
-            COMMAND: [The exact tool command to run]
-            
-            If no tool is needed, just converse normally.
-            
-            User Request: $userInput
-        """.trimIndent()
+        // Strict ChatML formatting. Notice it ends exactly at "COMMAND: "
+        val systemPrompt = """<|im_start|>system
+You are an OS router. Match the user request to a tool. Output ONLY the command.
+Tools: $manifest<|im_end|>
+<|im_start|>user
+$userInput<|im_end|>
+<|im_start|>assistant
+COMMAND: """
 
         printToTerminal("> [DEVILKING AI]: Analyzing request...")
         
         uiScope.launch(Dispatchers.IO) {
             try {
-                // We wrap this in a try-catch to intercept memory buffer overflows
                 val response = aiCore.generateResponse(systemPrompt)
                 withContext(Dispatchers.Main) {
                     handleAgentResponse(response)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    printToTerminal("> [!] AI CORE FAILURE: ${e.message ?: "Unknown Error. Check C++ Engine Memory."}")
+                    printToTerminal("> [!] AI CORE FAILURE: ${e.message}")
                 }
             }
         }
     }
 
     private fun handleAgentResponse(response: String) {
-        printToTerminal(response)
+        // Since we forced "COMMAND: " in the prompt, the AI's output is just the raw text.
+        // We take the first line to ensure we ignore any hallucinated garbage underneath it.
+        val extractedCommand = response.lines().firstOrNull()?.trim() ?: ""
         
-        val commandRegex = Regex("(?i)COMMAND:\\s*(.+)")
-        val match = commandRegex.find(response)
-        
-        if (match != null) {
-            val extractedCommand = match.groupValues[1].replace("*", "").replace("[", "").replace("]", "").trim()
+        if (extractedCommand.isNotEmpty() && extractedCommand.length < 50) {
             printToTerminal("> [SYSTEM]: Autonomous Execution Triggered -> '$extractedCommand'")
-            
             uiScope.launch {
-                delay(1000) 
+                delay(800) 
                 processInput(extractedCommand)
             }
+        } else {
+            printToTerminal("> [DEVILKING AI]: $response")
         }
     }
 
