@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(hardwareHijackReceiver, filter)
         }
 
-        commandHistory.add("DEVILKING OS [Version 1.2.0 - Forced Prefill]")
+        commandHistory.add("DEVILKING OS [Version 1.2.1 - Bracket Trap]")
         commandHistory.add("> Hardware Hijack: Walkie-Talkie Mode Armed.")
         commandHistory.add(aiCore.checkCoreStatus())
         
@@ -261,19 +261,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- PATH 1: THE AUTONOMOUS AGENT (Forced Prefill Edition) ---
+    // --- PATH 1: THE AUTONOMOUS AGENT (Bracket Trap Edition) ---
     private fun askAutonomousAgent(userInput: String) {
-        // Compress the manifest to save RAM and context window
         val manifest = commandRegistry.getManifestMenu().replace("\n", " | ")
         
-        // Strict ChatML formatting. Notice it ends exactly at "COMMAND: "
+        // We trap the AI by leaving an open bracket. 
+        // It will be forced to output: wiretap on]
         val systemPrompt = """<|im_start|>system
-You are an OS router. Match the user request to a tool. Output ONLY the command.
+You are a router. Output ONLY the exact tool command inside brackets. Example: [clear]
 Tools: $manifest<|im_end|>
 <|im_start|>user
 $userInput<|im_end|>
 <|im_start|>assistant
-COMMAND: """
+["""
 
         printToTerminal("> [DEVILKING AI]: Analyzing request...")
         
@@ -292,9 +292,9 @@ COMMAND: """
     }
 
     private fun handleAgentResponse(response: String) {
-        // Since we forced "COMMAND: " in the prompt, the AI's output is just the raw text.
-        // We take the first line to ensure we ignore any hallucinated garbage underneath it.
-        val extractedCommand = response.lines().firstOrNull()?.trim() ?: ""
+        // Since we fed it "[", the AI output will be "wiretap on]". 
+        // We grab everything before the closing bracket.
+        val extractedCommand = response.substringBefore("]").trim()
         
         if (extractedCommand.isNotEmpty() && extractedCommand.length < 50) {
             printToTerminal("> [SYSTEM]: Autonomous Execution Triggered -> '$extractedCommand'")
@@ -303,7 +303,7 @@ COMMAND: """
                 processInput(extractedCommand)
             }
         } else {
-            printToTerminal("> [DEVILKING AI]: $response")
+            printToTerminal("> [DEVILKING AI]: Signal lost or hallucination caught.")
         }
     }
 
