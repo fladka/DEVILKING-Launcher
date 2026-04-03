@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var acousticShield: AcousticShield
     private lateinit var intentVault: IntentVault
     private lateinit var commandRegistry: CommandRegistry
+    private lateinit var regexRouter: com.devilking.os.ai.RegexRouter
     private val uiScope = CoroutineScope(Dispatchers.Main + Job())
     
     // VOSK OFFLINE ENGINE
@@ -102,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         aiCore = LocalAICore(this)
         acousticShield = AcousticShield(this)
         intentVault = IntentVault(this)
+        regexRouter = com.devilking.os.ai.RegexRouter(this)
         
         setupCommandRegistry() // Initialize the Dynamic Router
         setupUI()
@@ -314,14 +316,24 @@ $userInput<|im_end|>
         }
         commandInput.text.clear()
 
-        // 1. Check if the input is a registered system tool
+        // 1. THE INTERCEPT: Route through the Brainstem First!
+        val routerResponse = regexRouter.route(cleanInput)
+        if (routerResponse != null) {
+            if (routerResponse.isNotBlank()) {
+                printToTerminal(routerResponse)
+            }
+            return
+        }
+
+        // 2. Check if the input is a registered system tool
         if (commandRegistry.process(cleanInput)) {
             return
         }
 
-        // 2. If it is NOT a system tool, trigger the Autonomous ReAct Agent
+        // 3. WAKE THE AI: If everything fails, trigger the ReAct Agent
         askAutonomousAgent(cleanInput)
     }
+
 
     // --- UI & AUDIO BOILERPLATE BELOW ---
     private fun setupUI() {
