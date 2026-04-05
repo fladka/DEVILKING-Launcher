@@ -7,6 +7,9 @@ import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.ContactsContract
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import com.devilking.os.automation.DevilkingService
 import com.devilking.os.automation.SemanticEye
 
@@ -112,8 +115,12 @@ class SystemExecutor(private val context: Context) {
                 // 2. Scan the tree
                 val screenData = parser.scan(rootNode)
                 
-                // 3. ASSASSINATE THE ROOT NODE (Prevents RAM overflow crash)
-                rootNode.recycle() 
+                // 3. THE FIX: We removed rootNode.recycle() so God Mode stops crashing.
+
+                // 4. THE UI UPDATE: Pop a Toast over any app so you know it worked outside DEVILKING.
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(context, "[SEMANTIC EYE]: Matrix Scanned!", Toast.LENGTH_SHORT).show()
+                }
                 
                 return "> [SEMANTIC EYE DATA]:\n$screenData"
             } else {
