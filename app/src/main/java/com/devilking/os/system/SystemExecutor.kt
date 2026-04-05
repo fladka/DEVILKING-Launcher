@@ -104,8 +104,21 @@ class SystemExecutor(private val context: Context) {
         // --- THE UPGRADE: SEMANTIC EYE INTEGRATION ---
         if (cmd == "scan screen") {
             val parser = SemanticEye()
-            val screenData = parser.scan(godMode.rootInActiveWindow)
-            return "> [SEMANTIC EYE DATA]:\n$screenData"
+            
+            // 1. Grab the master node from Android
+            val rootNode = godMode.rootInActiveWindow
+            
+            if (rootNode != null) {
+                // 2. Scan the tree
+                val screenData = parser.scan(rootNode)
+                
+                // 3. ASSASSINATE THE ROOT NODE (Prevents RAM overflow crash)
+                rootNode.recycle() 
+                
+                return "> [SEMANTIC EYE DATA]:\n$screenData"
+            } else {
+                return "> [!] SEMANTIC EYE BLIND: Android refused to hand over the screen."
+            }
         }
 
         // PHANTOM GESTURES
