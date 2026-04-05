@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.provider.ContactsContract
 import com.devilking.os.automation.DevilkingService
+import com.devilking.os.automation.SemanticEye
 
 class SystemExecutor(private val context: Context) {
 
@@ -100,9 +101,11 @@ class SystemExecutor(private val context: Context) {
             return "> [SYSTEM]: Device Locked."
         }
 
-        // UI MATRIX DUMP
+        // --- THE UPGRADE: SEMANTIC EYE INTEGRATION ---
         if (cmd == "scan screen") {
-            return godMode.dumpScreenMatrix()
+            val parser = SemanticEye()
+            val screenData = parser.scan(godMode.rootInActiveWindow)
+            return "> [SEMANTIC EYE DATA]:\n$screenData"
         }
 
         // PHANTOM GESTURES
