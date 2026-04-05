@@ -42,9 +42,13 @@ class SemanticEye {
                 elementCounter++
             }
 
-            // Recursively dig into children
+            // Recursively dig into children with strict JNI memory management
             for (i in 0 until node.childCount) {
-                traverseNode(node.getChild(i))
+                val child = node.getChild(i)
+                if (child != null) {
+                    traverseNode(child)
+                    child.recycle() // CRITICAL FIX: Destroys the node to prevent memory leaks
+                }
             }
         }
 
