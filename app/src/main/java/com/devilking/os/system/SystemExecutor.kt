@@ -20,13 +20,14 @@ class SystemExecutor(private val context: Context) {
     fun executeCommand(commandString: String): String {
         val cmd = commandString.removePrefix("[CMD: ").removeSuffix("]").trim()
 
-        // 1. AEGIS FIREWALL WHITELIST (UPGRADED WITH TOGGLES)
+        // 1. AEGIS FIREWALL WHITELIST (UPGRADED WITH TOGGLES AND TAP)
         val isSafe = cmd.startsWith("flashlight") ||
                      cmd.startsWith("open ") ||
                      cmd.startsWith("call ") ||
                      cmd.startsWith("scroll") ||
                      cmd.startsWith("2x ") || 
                      cmd.startsWith("snipe ") ||
+                     cmd.startsWith("tap ") ||
                      cmd.startsWith("type ") ||
                      cmd.startsWith("macro ") ||
                      cmd == "settings" ||
@@ -150,6 +151,22 @@ class SystemExecutor(private val context: Context) {
             val target = cmd.removePrefix("snipe ").trim().replace("[", "").replace("]", "").trim()
             val success = godMode.executeSniperStrike(target)
             return if (success) "> [SYSTEM]: Sniper Strike confirmed on '$target'." else "> [!] SNIPER ERROR: Target '$target' not found."
+        }
+
+        // THE NEW COORDINATE SNIPER
+        if (cmd.startsWith("tap ")) {
+            val coords = cmd.removePrefix("tap ").trim().split(Regex("[, ]+"))
+            if (coords.size >= 2) {
+                val x = coords[0].toFloatOrNull()
+                val y = coords[1].toFloatOrNull()
+                
+                if (x != null && y != null) {
+                    val success = godMode.executeCoordinateStrike(x, y)
+                    return if (success) "> [SYSTEM]: Phantom Strike delivered at ($x, $y)." 
+                           else "> [!] SNIPER ERROR: Failed to dispatch gesture."
+                }
+            }
+            return "> [!] SYNTAX ERROR: Use format 'tap [X] [Y]'"
         }
 
         // AUTO-FOCUS INJECTOR
