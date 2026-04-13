@@ -204,6 +204,25 @@ class DevilkingService : AccessibilityService() {
         dispatchGesture(gesture, null, null)
     }
 
+    // --- THE NEW COORDINATE SNIPER ---
+    fun executeCoordinateStrike(x: Float, y: Float): Boolean {
+        val path = Path()
+        path.moveTo(x, y)
+        
+        // Create a 50ms tap gesture
+        val gestureBuilder = GestureDescription.Builder()
+        val strokeDescription = GestureDescription.StrokeDescription(path, 0, 50)
+        gestureBuilder.addStroke(strokeDescription)
+        
+        val success = dispatchGesture(gestureBuilder.build(), object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                super.onCompleted(gestureDescription)
+            }
+        }, null)
+        
+        return success
+    }
+
     fun performSwipeUp() {
         val path = Path().apply { moveTo(500f, 1500f); lineTo(500f, 500f) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0L, 500L)).build()
